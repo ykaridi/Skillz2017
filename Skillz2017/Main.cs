@@ -1,11 +1,106 @@
 ﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        public void DoTurn(PirateGame game)        {            try            {
 
             }            catch (Exception e)            {                game.Debug(e.StackTrace);            }        }    }
-
+    #region Game Systems
+    #region Basic Drones
+    class StupidDrone : DroneLogic
+    {
+        GameEngine engine;
+        public StupidDrone(GameEngine engine)
+        {
+            this.engine = engine;
+        }
+        public void DoTurn(TradeShip ship)
+        {
+            ship.SailToCity(engine.SailDefault());
+        }
+    }
+    class RandomDrone : DroneLogic
+    {
+        GameEngine engine;
+        public RandomDrone(GameEngine engine)
+        {
+            this.engine = engine;
+        }
+        public void DoTurn(TradeShip ship)
+        {
+            ship.SailToCity(engine.SailRandom());
+        }
+    }
+    class AvoidingDrone : DroneLogic
+    {
+        GameEngine engine;
+        public AvoidingDrone(GameEngine engine)
+        {
+            this.engine = engine;
+        }
+        public void DoTurn(TradeShip ship)
+        {
+            ship.SailToCity(engine.MinimizeShipsSail());
+        }
+    }
+    #endregion BasicDrones
+    #endregion GameSystems
+    #region Logic Interfaces
+    interface IndividualPirateGameLogic
+    {
+        PirateLogic AssignPirateLogic(PirateShip p);
+        DroneLogic AssignDroneLogic(TradeShip d);
+    }
+    interface PirateLogic
+    {
+        void DoTurn(PirateShip pirate);
+    }
+    interface PirateSquadGameLogic
+    {
+        PirateSquad[] AssignSquads(PirateShip[] ships);
+        PirateSquadLogic AssignSquadLogic(PirateSquad psl);
+        DroneLogic AssignDroneLogic(TradeShip d);
+    }
+    interface PirateSquadLogic
+    {
+        Location CalculateDestination();
+        PirateLogic AssignPirateLogic(PirateShip pirate, int id);
+    }
+    interface DroneLogic
+    {
+        void DoTurn(TradeShip ship);
+    }
+    #endregion Logic Interfaces
     #region Game Classes    class GameEngine    {        public Dictionary<int, int> HitList = new Dictionary<int, int>();        public readonly Random random;        protected readonly PirateGame game;
         public GameEngine(PirateGame game)
         {
             this.game = game;
+        }
+
+        public void DoTurn(IndividualPirateGameLogic gl)
+        {
+            foreach (PirateShip pirate in MyLivingPirates)
+            {
+                gl.AssignPirateLogic(pirate).DoTurn(pirate);
+            }
+            foreach (TradeShip drone in MyLivingDrones)
+            {
+                gl.AssignDroneLogic(drone).DoTurn(drone);
+            }
+        }
+        public void DoTurn(PirateSquadGameLogic gl)
+        {
+            foreach(PirateSquad squad in gl.AssignSquads(MyLivingPirates.Select(x => (PirateShip)x).ToArray()))
+            {
+                PirateSquadLogic sl = gl.AssignSquadLogic(squad);
+                Location dest = sl.CalculateDestination();
+                int id = 0;
+                foreach(PirateShip ps in squad)
+                {
+                    sl.AssignPirateLogic(ps, id).DoTurn(ps);
+                    id += 1;
+                }
+            }
+            foreach (TradeShip drone in MyLivingDrones)
+            {
+                gl.AssignDroneLogic(drone).DoTurn(drone);
+            }
         }
 
         #region Extends
@@ -124,6 +219,13 @@
             get
             {
                 return new AircraftList<Pirate>(this, game.GetMyLivingPirates());
+            }
+        }
+        public AircraftList<Drone> MyLivingDrones
+        {
+            get
+            {
+                return new AircraftList<Drone>(this, game.GetMyLivingDrones());
             }
         }
         public int AttackRange
@@ -390,7 +492,7 @@
                  Sail(ac, l, loc => GetDronesInAttackRange(loc).Count);
              });
         }
-        public Action<Aircraft, Location> CountEnemyShips()
+        public Action<Aircraft, Location> MinimizeShipsSail()
         {
             return new Action<Aircraft, Location>((ac, l) =>
             {
@@ -617,6 +719,17 @@
         public AircraftList(GameEngine engine, IEnumerable<AircraftBase<T>> aircrafts) : base()
         {
             this.AddRange(aircrafts);
+        }
+    }
+    class PirateSquad : List<PirateShip>
+    {
+        PirateShip[] ships;
+        public PirateSquad(params PirateShip[] ships)
+        {
+            foreach(PirateShip ps in ships)
+            {
+                this.Add(ps);
+            }
         }
     }
     #endregion Aircrafts
