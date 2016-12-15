@@ -548,18 +548,30 @@
         {
             return Attack(aircraft.aircraft);
         }
-        public bool TryAttack(Func<Aircraft, double> ScoringFunction)
+        public bool TryAttack(Func<AircraftBase<Aircraft>, double> ScoringFunction)
         {
-            List<AircraftBase<Aircraft>> options = GetAircraftsInAttackRange().OrderBy(x => ScoringFunction(x.aircraft)).ToList();
+            List<AircraftBase<Aircraft>> options = GetAircraftsInAttackRange().OrderBy(x => ScoringFunction(x)).ToList();
             if (options.Count > 0)
             {
                 AircraftBase<Aircraft> f = options.First();
-                if (ScoringFunction(f.aircraft) < 0)
+                if (ScoringFunction(f) < 0)
                     return false;
                 return Attack(options.First());
             }
             else
                 return false;
+        }
+        public bool TryAttackAnything(bool DronesFirst = true)
+        {
+            if (DronesFirst) return TryAttack(x =>
+            {
+                if (x.Type == AircraftType.Drone) return (engine.DroneMaxHealth - x.CurrentHealth) * engine.GetMyDroneById(aircraft.Id).Value * 10;
+                else return engine.PirateMaxHealth - x.CurrentHealth;
+            }); else return TryAttack(x =>
+            {
+                if (x.Type == AircraftType.Drone) return (engine.PirateMaxHealth - x.CurrentHealth) * 10;
+                else return engine.DroneMaxHealth - x.CurrentHealth;
+            });
         }
         public List<AircraftBase<Aircraft>> GetAircraftsInAttackRange()
         {
