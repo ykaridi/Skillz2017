@@ -1,6 +1,8 @@
-﻿using System;using System.Collections.Generic;using System.Linq;using System.Text;using System.Threading.Tasks;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        public void DoTurn(PirateGame game)        {            try            {
+﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        public void DoTurn(PirateGame game)        {            try            {
 
-            }            catch (Exception e)            {                game.Debug(e.StackTrace);            }        }    }    class GameEngine    {        public Dictionary<int, int> HitList = new Dictionary<int, int>();        public readonly Random random;        protected readonly PirateGame game;
+            }            catch (Exception e)            {                game.Debug(e.StackTrace);            }        }    }
+
+    #region Game Classes    class GameEngine    {        public Dictionary<int, int> HitList = new Dictionary<int, int>();        public readonly Random random;        protected readonly PirateGame game;
         public GameEngine(PirateGame game)
         {
             this.game = game;
@@ -337,18 +339,24 @@
 
 
         #endregion Extends
-        #region Custom         private void AppendToHitlist(Aircraft aircraft)
+        #region Custom         private int HitlistId(Aircraft aircraft)
         {
-            HitList[aircraft.Id] = GetHits(aircraft) + 1;
+            if (Utils.DetermineType(aircraft.Type) == AircraftType.Drone)
+                return aircraft.Id + MyPirates.Count;
+            else
+                return aircraft.Id;
+        }        private void AppendToHitlist(Aircraft aircraft)
+        {
+            HitList[HitlistId(aircraft)] = GetHits(aircraft) + 1;
         }
         private int GetHits(Aircraft aircraft)
         {
             int value = 0;
-            if (HitList.TryGetValue(aircraft.Id, out value))
+            if (HitList.TryGetValue(HitlistId(aircraft), out value))
                 return value;
             else
             {
-                HitList.Add(aircraft.Id, 0);
+                HitList.Add(HitlistId(aircraft), 0);
                 return 0;
             }
         }
@@ -404,7 +412,7 @@
             });
         }
         #endregion Custom    }
-
+    #endregion Game Classes
     #region Aircrafts    class SmartIsland    {        Island island;        GameEngine engine;        public SmartIsland(Island island, GameEngine engine)        {            this.island = island;            this.engine = engine;        }
 
 
@@ -611,7 +619,7 @@
             this.AddRange(aircrafts);
         }
     }
-    #endregion Aircrafts
+    #endregion Aircrafts
     #region Utils    class Utils    {        public static bool locationsEqual(Location loc1, Location loc2)        {            return (loc1.Row == loc2.Row) && (loc1.Col == loc2.Col);        }        public static bool isBetween(Location loc, Location bound1, Location bound2)        {            return isBetween(loc.Row, bound1.Row, bound2.Row) && isBetween(loc.Col, bound1.Col, bound2.Col);        }        public static bool isBetween(int num, int bound1, int bound2)        {            if (bound1 > bound2)                return num >= bound2 && num <= bound1;            else                return num >= bound1 && num <= bound2;        }
 
         public static AircraftType DetermineType(string type)
