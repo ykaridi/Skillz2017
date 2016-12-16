@@ -1,5 +1,5 @@
-﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        public void DoTurn(PirateGame game)        {            try            {
-                GameEngine engine = game.Upgrade();
+﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        DataStore store = new DataStore();        public void DoTurn(PirateGame game)        {            try            {
+                GameEngine engine = game.Upgrade(store);
                 
             }            catch (Exception e)            {                game.Debug(e.StackTrace);            }        }    }
     #region Game Systems
@@ -128,8 +128,13 @@
         void DoTurn(TradeShip ship);
     }
     #endregion Logic Interfaces
-    #region Game Classes    class GameEngine    {        public Dictionary<int, int> HitList = new Dictionary<int, int>();        public readonly Random random = new Random();        protected readonly PirateGame game;
-        public GameEngine(PirateGame game)
+    #region Game Classes    class GameEngine    {        public readonly Random random = new Random();        public Dictionary<int, int> HitList = new Dictionary<int, int>();        public readonly DataStore store;        protected readonly PirateGame game;
+        public GameEngine(PirateGame game, DataStore store)
+        {
+            this.game = game;
+            this.store = store;
+        }
+        public GameEngine(PirateGame game) : this(game, new DataStore())
         {
             this.game = game;
         }
@@ -923,6 +928,10 @@
         {
             return new GameEngine(game);
         }
+        public static GameEngine Upgrade(this PirateGame game, DataStore store)
+        {
+            return new GameEngine(game, store);
+        }
 
         public static Squad<PirateShip> Squad(this IEnumerable<Pirate> pirates, GameEngine engine)
         {
@@ -939,4 +948,11 @@
         {
             return new Func<T, double>(x => f(x) * other(x));
         }    }    class PrioritizedActionList<T>    {        ConditioninalAction<T>[] actions;        public PrioritizedActionList(ConditioninalAction<T>[] actions)        {            this.actions = actions;        }        public bool invoke(T obj)        {            for (int i = 0; i < actions.Length; i++)            {                if (actions[i].invoke(obj))                    return true;            }            return false;        }    }    class ConditioninalAction<T>    {        private bool state;        private Func<T, bool> condition;        private Func<T, bool> action;        public ConditioninalAction(bool state, Func<T, bool> condition, Func<T, bool> action)        {            this.state = state;            this.condition = condition;            this.action = action;        }        public bool invoke(T obj)        {            if (condition.Invoke(obj) && state)            {                action(obj);                return true;            }            return false;        }        public bool invokeOnArray(T[] arr)        {            if (state)            {                foreach (T c in arr.Where(x => condition.Invoke(x)))                {                    if (action(c))                        return true;                }            }            return false;        }    }
+    class DataStore : Dictionary<string, object>
+    {
+        public DataStore() : base()
+        {
+
+        }
+    }
     #endregion Utils}
