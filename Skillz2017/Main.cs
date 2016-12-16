@@ -1,5 +1,6 @@
 ﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        public void DoTurn(PirateGame game)        {            try            {
-
+                GameEngine engine = game.Upgrade();
+                
             }            catch (Exception e)            {                game.Debug(e.StackTrace);            }        }    }
     #region Game Systems
     #region Basic Drones
@@ -40,7 +41,7 @@
         }
     }
     #endregion BasicDrones
-    #region Pirates 
+    #region Pirates
     #endregion Pirates
     #region Pirate Plugins
     class ShootingPlugin : PiratePlugin
@@ -80,11 +81,15 @@
 
         public static ShootingPlugin PrioritizeByHealth()
         {
-            return new ShootingPlugin(GameEngine.ShootByHealthRemaining);
+            return new ShootingPlugin(GameEngine.ShootByCurrentHealth);
         }
         public static ShootingPlugin PrioritizeByDamageTaken()
         {
             return new ShootingPlugin(GameEngine.ShootByDamageTaken);
+        }
+        public static ShootingPlugin PrioritizeByNearnessToDeath()
+        {
+            return new ShootingPlugin(GameEngine.ShootByNearnessToDeath);
         }
     }
     #endregion Pirate Plugins
@@ -606,7 +611,7 @@
                 });
             }
         }
-        public static Func<AircraftBase, double> ShootByHealthRemaining
+        public static Func<AircraftBase, double> ShootByCurrentHealth
         {
             get
             {
@@ -636,6 +641,17 @@
                 });
             }
         }
+        public static Func<AircraftBase, double> ShootByNearnessToDeath
+        {
+            get
+            {
+                return new Func<AircraftBase, double>(x =>
+                {
+                    return ((double)(x.MaxHealth - x.CurrentHealth)) / x.MaxHealth;
+                });
+            }
+        }
+
         #endregion Shooting Functions
         #endregion Custom
     }
@@ -902,6 +918,10 @@
         }        public static TradeShip Upgrade(this Drone drone, GameEngine engine)
         {
             return new TradeShip(engine, drone);
+        }
+        public static GameEngine Upgrade(this PirateGame game)
+        {
+            return new GameEngine(game);
         }
 
         public static Squad<PirateShip> Squad(this IEnumerable<Pirate> pirates, GameEngine engine)
