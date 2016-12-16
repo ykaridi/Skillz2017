@@ -57,13 +57,21 @@
             LogicedPirate[] pirates = new LogicedPirate[pss.Length];
             Squad<PirateShip> APirates = new Squad<PirateShip>(pss);
             PirateShip camper = APirates.OrderBy(p => p.Distance(engine.EnemyCities[0])).First();
-            pirates[0] = new LogicedPirate(camper, new EmptyPirate().AttachPlugin(ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(1)).AttachPlugin(new CamperPlugin(engine, engine.EnemyCities[0].Location, ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(2))));
+            pirates[0] = new LogicedPirate(camper, new EmptyPirate().AttachPlugin(ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(1)).AttachPlugin(new CamperPlugin(engine, engine.EnemyCities[0].Location, ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.9))));
             APirates = APirates.FilterOutById(camper.Id);
-            for(int i = 0; i < pss.Length-1; i++)
+            int baseIdx = 1;
+            if (engine.GetEnemyShipsInRange(engine.MyCities[0].Location, 7).Count > 0 && pss.Length > 1)
+            {
+                PirateShip anticamper = APirates.OrderBy(p => p.Distance(engine.MyCities[0])).First();
+                pirates[1] = new LogicedPirate(anticamper, new EmptyPirate().AttachPlugin(new ShootingPlugin().PiratesOnly()).AttachPlugin(new AntiCamperPlugin(engine)));
+                APirates = APirates.FilterOutById(anticamper.Id);
+                baseIdx += 1;
+            }
+            for(int i = 0; i < pss.Length-baseIdx; i++)
             {
                 PirateShip s = APirates.OrderBy(p => p.Distance(islands[i].Location)).First();
                 APirates = APirates.FilterOutById(s.Id);
-                pirates[i+1] = new LogicedPirate(s, new EmptyPirate().AttachPlugin(ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.5)).AttachPlugin(new ConquerPlugin(islands[i],engine)));
+                pirates[i+baseIdx] = new LogicedPirate(s, new EmptyPirate().AttachPlugin(ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.5)).AttachPlugin(new ConquerPlugin(islands[i],engine)));
             }
             return pirates;
         }
