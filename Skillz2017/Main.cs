@@ -1,4 +1,5 @@
 ﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        DataStore store = new DataStore();        public void DoTurn(PirateGame game)        {            try            {
+                store.NextTurn();
                 GameEngine engine = game.Upgrade(store);
 
                 store.FlushLogicAssignments();
@@ -14,7 +15,7 @@
         }
         public void DoTurn(TradeShip ship)
         {
-            ship.SailToCity(engine.SailDefault);
+            ship.SailToCity(ship.SailDefault);
         }
     }
     class RandomDrone : DroneLogic
@@ -26,7 +27,7 @@
         }
         public void DoTurn(TradeShip ship)
         {
-            ship.SailToCity(engine.SailRandom);
+            ship.SailToCity(ship.SailRandom);
         }
     }
     class AvoidingDrone : DroneLogic
@@ -38,7 +39,7 @@
         }
         public void DoTurn(TradeShip ship)
         {
-            ship.SailToCity(engine.SailMinimizeShips);
+            ship.SailToCity(ship.SailMinimizeShips);
         }
     }
     #endregion BasicDrones
@@ -47,32 +48,52 @@
     #region Pirate Plugins
     class ShootingPlugin : PiratePlugin
     {
-        Func<AircraftBase, double> ScoringMehtod;
+        Func<AircraftBase, double> ScoringFunction;
         public ShootingPlugin(Func<AircraftBase, double> ScoringMehtod)
         {
-            this.ScoringMehtod = ScoringMehtod;
+            this.ScoringFunction = ScoringMehtod;
         }
-        public ShootingPlugin() : this(GameEngine.ShootRegular) { }
+        public ShootingPlugin() : this(PirateShip.ShootRegular) { }
 
         public bool DoTurn(PirateShip ship)
         {
-            if (ship.TryAttack(ScoringMehtod))
+            AircraftBase aircraft;
+            if (Scan(ship, ship.AttackRange, out aircraft) && ship.Attack(aircraft.aircraft))
                 return true;
+            else
+                return false;
+        }
+        public bool Scan(PirateShip ship, int range, out AircraftBase aircraft, bool OrderByDescending = true)
+        {
+            aircraft = null;
+
+            List<AircraftBase> options = ship.GetAircraftsInRange(range);
+            if (OrderByDescending)
+                options = options.OrderByDescending(x => ScoringFunction(x)).ToList();
+            else
+                options = options.OrderBy(x => ScoringFunction(x)).ToList();
+            if (options.Count > 0)
+            {
+                aircraft = options.First();
+                if (ScoringFunction(aircraft) <= 0)
+                    return false;
+                return true;
+            }
             else
                 return false;
         }
 
         public ShootingPlugin DronesOnly()
         {
-            return new ShootingPlugin(ScoringMehtod.Times(GameEngine.ShootDronesOnly));
+            return new ShootingPlugin(ScoringFunction.Times(PirateShip.ShootDronesOnly));
         }
         public ShootingPlugin PiratesOnly()
         {
-            return new ShootingPlugin(ScoringMehtod.Times(GameEngine.ShootPiratesOnly));
+            return new ShootingPlugin(ScoringFunction.Times(PirateShip.ShootPiratesOnly));
         }
         public ShootingPlugin PrioritizeByValue(double ShipValue = 0.5)
         {
-            return new ShootingPlugin(ScoringMehtod.Times(x =>
+            return new ShootingPlugin(ScoringFunction.Times(x =>
             {
                 if (x.Type == AircraftType.Drone) return x.AsDrone().Value;
                 else if (x.Type == AircraftType.Pirate) return ShipValue;
@@ -82,15 +103,91 @@
 
         public static ShootingPlugin PrioritizeByHealth()
         {
-            return new ShootingPlugin(GameEngine.ShootByCurrentHealth);
+            return new ShootingPlugin(PirateShip.ShootByCurrentHealth);
         }
         public static ShootingPlugin PrioritizeByDamageTaken()
         {
-            return new ShootingPlugin(GameEngine.ShootByDamageTaken);
+            return new ShootingPlugin(PirateShip.ShootByDamageTaken);
         }
         public static ShootingPlugin PrioritizeByNearnessToDeath()
         {
-            return new ShootingPlugin(GameEngine.ShootByNearnessToDeath);
+            return new ShootingPlugin(PirateShip.ShootByNearnessToDeath);
+        }
+    }
+    class ConquerPlugin : PiratePlugin
+    {
+        SmartIsland island;
+        GameEngine engine;
+        public ConquerPlugin(SmartIsland island, GameEngine engine)
+        {
+            this.island = island;
+            this.engine = engine;
+        }
+        public bool DoTurn(PirateShip ship)
+        {
+            if (island.InControlRange(ship)) return false;
+            else
+                ship.Sail(island.Location, ship.SailMaximizeDrone);
+            return true;
+        }
+    }
+    class EscortPlugin : PiratePlugin
+    {
+        public bool DoTurn(PirateShip ship)
+        {
+            throw new NotImplementedException();
+        }
+    }
+    class CamperPlugin : PiratePlugin
+    {
+        Location Camp;
+        ShootingPlugin shooter;
+        int range;
+        public CamperPlugin(Location loc, ShootingPlugin shooter, int range = 7)
+        {
+            this.Camp = loc;
+            this.shooter = shooter;
+            this.range = range;
+        }
+
+        public bool DoTurn(PirateShip ship)
+        {
+            AircraftBase craft;
+            if (shooter.Scan(ship, range, out craft))
+            {
+                if (ship.InAttackRange(craft)) ship.Attack(craft.aircraft);
+                else ship.Sail(craft.Location, ship.SailMaximizeDrone);
+                return true;
+            }
+            return false;
+        }
+    }
+    class AntiCamperPlugin : PiratePlugin
+    {
+        GameEngine engine;
+        int range;
+        ShootingPlugin shooter = ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.5);
+        public AntiCamperPlugin(GameEngine engine, int range = 7)
+        {
+            this.engine = engine;
+            this.range = range;
+        }
+        public bool DoTurn(PirateShip ship)
+        {
+            List<City> cities = engine.MyCities.Where(c => engine.GetEnemyShipsInRange(ship.Location, range).Count > 0).OrderBy(x => x.Distance(ship)).ToList();
+            if (cities.Count > 0)
+            {
+                City c = cities.First();
+                AircraftBase craft;
+                if (ship.InRange(c, range) && shooter.Scan(ship, range - ship.Distance(c), out craft))
+                {
+                    if (ship.InAttackRange(craft)) ship.Attack(craft.aircraft);
+                    else ship.Sail(craft.Location, ship.SailMaximizeDrone);
+                } else ship.Sail(c.Location, ship.SailMaximizeDrone);
+                return true;
+            }
+            else
+                return false;
         }
     }
     #endregion Pirate Plugins
@@ -103,11 +200,11 @@
     }
     abstract class PirateLogic
     {
-        PiratePlugin[] Plugins
+        public PiratePlugin[] Plugins
         {
-            get;
+            get; set;
         } = new PiratePlugin[0];
-        abstract public void DoTurn(PirateShip pirate);
+        public abstract void DoTurn(PirateShip pirate);
     }
     interface PiratePlugin
     {
@@ -129,11 +226,16 @@
         void DoTurn(TradeShip ship);
     }
     #endregion Logic Interfaces
-    #region Game Classes    class GameEngine    {        public readonly Random random = new Random();        public Dictionary<int, int> HitList = new Dictionary<int, int>();        public readonly DataStore store;        protected readonly PirateGame game;
+    #region Game Classes    class GameEngine    {        public readonly Random random = new Random();        public Dictionary<int, int> HitList = new Dictionary<int, int>();        public Dictionary<int, bool> MoveList = new Dictionary<int, bool>();        public readonly DataStore store;        protected readonly PirateGame game;
         public GameEngine(PirateGame game, DataStore store)
         {
             this.game = game;
             this.store = store;
+
+            this.MyLivingAircrafts.ForEach(aircraft =>
+            {
+                MarkOnList(aircraft.aircraft, true);
+            });
         }
         public GameEngine(PirateGame game) : this(game, new DataStore())
         {
@@ -147,8 +249,18 @@
                 PirateLogic pl;
                 if (RespectDataStoreAssignments && store.TryGetLogic(pirate, out pl)) { }
                 else pl = gl.AssignPirateLogic(pirate);
-                pl.DoTurn(pirate);
+
+                bool stop = false;
+                foreach(PiratePlugin plugin in pl.Plugins)
+                {
+                    if ((stop = plugin.DoTurn(pirate)))
+                        break;
+                    stop = stop || (!pirate.CanPlay);
+                }
+                if (!stop)
+                    pl.DoTurn(pirate);
             }
+
             foreach (TradeShip drone in MyLivingDrones)
             {
                 DroneLogic dl;
@@ -178,13 +290,26 @@
                 int id = 0;
                 foreach(PirateShip ps in squad)
                 {
-                    sl.AssignPirateLogic(ps, id).DoTurn(ps);
+                    PirateLogic pl = sl.AssignPirateLogic(ps, id);
+                    bool stop = false;
+                    foreach (PiratePlugin plugin in pl.Plugins)
+                    {
+                        if ((stop = plugin.DoTurn(ps)))
+                            break;
+                        stop = stop || (!ps.CanPlay);
+                    }
+                    if (!stop)
+                        pl.DoTurn(ps);
                     id += 1;
                 }
             }
+
             foreach (TradeShip drone in MyLivingDrones)
             {
-                gl.AssignDroneLogic(drone).DoTurn(drone);
+                DroneLogic dl;
+                if (RespectDataStoreAssignments && store.TryGetLogic(drone, out dl)) { }
+                else dl = gl.AssignDroneLogic(drone);
+                dl.DoTurn(drone);
             }
         }
 
@@ -348,7 +473,6 @@
                 return game.GetDroneMaxSpeed();
             }
         }
-
         public TradeShip GetEnemyDroneById(int id)
         {
             return game.GetEnemyDroneById(id).Upgrade(this);
@@ -506,7 +630,6 @@
         {
             RandomSail(aircraft.aircraft, destination);
         }
-
         public void Sail(Aircraft aircraft, MapObject destination, Func<Location, double> ScoreFunction, bool OrderByAscending = true)
         {
             List<Location> locs = GetSailOptions(aircraft, destination);
@@ -521,8 +644,6 @@
         {
             Sail(aircraft.aircraft, destination, ScoreFunction, OrderByAscending);
         }
-
-
 
 
         #endregion Extends
@@ -555,6 +676,25 @@
         {
             return CheckHealth(aircraft) > 0;
         }
+
+        private int MovelistId(Aircraft craft)
+        {
+            if (craft.DetermineType() == AircraftType.Drone)
+                return craft.Id + MyPirates.Count;
+            else
+                return craft.Id;
+        }
+        private void MarkOnList(Aircraft craft, bool state = false)
+        {
+            MoveList[MovelistId(craft)] = state;
+        }
+        public bool CanPlay(Aircraft craft)
+        {
+            if (MoveList.ContainsKey(MovelistId(craft)))
+                return MoveList[MovelistId(craft)];
+            else
+                return false;
+        }
         public bool Attack(Pirate pirate, Aircraft target)
         {
             if (IsAlive(target))
@@ -564,20 +704,50 @@
                 return true;
             }
             else return false;
-        }        public Squad<TradeShip> GetDronesInAttackRange(Location loc)
+        }        public Squad<TradeShip> GetEnemyDronesInRange(Location loc, int range)
         {
-            return new Squad<TradeShip>(this, EnemyLivingDrones.Where(x => x.InRange(loc, AttackRange)));
+            return new Squad<TradeShip>(this, EnemyLivingDrones.Where(x => x.InRange(loc, range)));
+        }        public Squad<TradeShip> GetEnemyDronesInAttackRange(Location loc)
+        {
+            return GetEnemyDronesInRange(loc, AttackRange);
+        }        public Squad<PirateShip> GetEnemyShipsInRange(Location loc, int range)
+        {
+            return new Squad<PirateShip>(this, EnemyLivingPirates.Where(x => x.InRange(loc, range)));
         }        public Squad<PirateShip> GetEnemyShipsInAttackRange(Location loc)
         {
-            return new Squad<PirateShip>(this, EnemyLivingPirates.Where(x => x.InRange(loc, AttackRange)));
+            return GetEnemyShipsInRange(loc, AttackRange);
         }
+        public Squad<AircraftBase> GetEnemyAircraftsInRange(Location loc, int range)
+        {
+            return new Squad<AircraftBase>(this, EnemyLivingAircrafts.Where(x => x.InRange(loc, range)));
+        }
+        #endregion Custom
+    }
+    #endregion Game Classes
+    #region Aircrafts    class SmartIsland    {        Island island;        GameEngine engine;        public SmartIsland(Island island, GameEngine engine)        {            this.island = island;            this.engine = engine;        }
+
+
+        #region Extends        public int Id        {            get            {                return island.Id;            }        }        public Location Location        {            get            {                return island.Location;            }        }        public Player Owner        {            get            {                return island.Owner;            }        }        public int TurnsToDroneCreation        {            get            {                return island.TurnsToDroneCreation;            }        }        public int ControlRange        {            get            {                return island.ControlRange;            }        }        public bool InControlRange(MapObject other)        {            return island.InControlRange(other);        }        public int Distance(MapObject other)        {            return island.Distance(other);        }        public bool IsOurs        {            get            {                return Owner.Id == engine.Self.Id;            }        }        public bool IsTheirs        {            get            {                return Owner.Id == engine.Enemy.Id;            }        }
+        public bool IsNeutral
+        {
+            get
+            {
+                return Owner.Id == engine.Neutral.Id;
+            }
+        }
+        #endregion Extends    }
+    public enum AircraftType
+    {
+        Drone, Pirate, Generic
+    }    class AircraftBase : MapObject
+    {
         #region Sailing Functions        public Action<Aircraft, Location> SailMaximizeDrone
         {
             get
             {
                 return new Action<Aircraft, Location>((ac, l) =>
                 {
-                    Sail(ac, l, loc => GetDronesInAttackRange(loc).Count);
+                    engine.Sail(ac, l, loc => engine.GetEnemyDronesInAttackRange(loc).Count);
                 });
             }
         }
@@ -587,7 +757,7 @@
             {
                 return new Action<Aircraft, Location>((ac, l) =>
                 {
-                    Sail(ac, l, loc => GetEnemyShipsInAttackRange(loc).Count, false);
+                    engine.Sail(ac, l, loc => engine.GetEnemyShipsInAttackRange(loc).Count, false);
                 });
             }
         }
@@ -597,7 +767,7 @@
             {
                 return new Action<Aircraft, Location>((ac, l) =>
                 {
-                    Sail(ac, l);
+                    engine.Sail(ac, l);
                 });
             }
         }
@@ -607,7 +777,7 @@
             {
                 return new Action<Aircraft, Location>((ac, l) =>
                 {
-                    Sail(ac, l);
+                    engine.Sail(ac, l);
                 });
             }
         }
@@ -675,28 +845,8 @@
                 });
             }
         }
-
         #endregion Shooting Functions
-        #endregion Custom
-    }
-    #endregion Game Classes
-    #region Aircrafts    class SmartIsland    {        Island island;        GameEngine engine;        public SmartIsland(Island island, GameEngine engine)        {            this.island = island;            this.engine = engine;        }
 
-
-        #region Extends        public int Id        {            get            {                return island.Id;            }        }        public Location Location        {            get            {                return island.Location;            }        }        public Player Owner        {            get            {                return island.Owner;            }        }        public int TurnsToDroneCreation        {            get            {                return island.TurnsToDroneCreation;            }        }        public int ControlRange        {            get            {                return island.ControlRange;            }        }        public bool InControlRange(MapObject other)        {            return island.InControlRange(other);        }        public int Distance(MapObject other)        {            return island.Distance(other);        }        public bool IsOurs        {            get            {                return Owner.Id == engine.Self.Id;            }        }        public bool IsTheirs        {            get            {                return Owner.Id == engine.Enemy.Id;            }        }
-        public bool IsNeutral
-        {
-            get
-            {
-                return Owner.Id == engine.Neutral.Id;
-            }
-        }
-        #endregion Extends    }
-    public enum AircraftType
-    {
-        Drone, Pirate, Generic
-    }    class AircraftBase : MapObject
-    {
         protected GameEngine engine;
         public Aircraft aircraft;
         public AircraftBase(GameEngine engine, Aircraft aircraft)
@@ -769,6 +919,14 @@
         }
         #endregion Extends
         #region Custom
+        public bool CanPlay
+        {
+            get
+            {
+                return engine.CanPlay(aircraft);
+            }
+        }
+
         public void Sail(Location loc, int idx = 0)
         {
             engine.Sail(this, loc, idx);
@@ -780,6 +938,10 @@
         public void Sail(Location loc, Func<Location, Double> ScoreFunction, bool OrderByAscending = true)
         {
             engine.Sail(this, loc, ScoreFunction, OrderByAscending);
+        }
+        public void Sail(Location loc, Action<Aircraft, Location> SailFunction)
+        {
+            SailFunction.Invoke(aircraft, loc);
         }
 
         public override Location GetLocation()
@@ -794,6 +956,11 @@
         public TradeShip AsDrone()
         {
             return new TradeShip(engine, (Drone)aircraft);
+        }
+
+        public Squad<AircraftBase> Scan(int range)
+        {
+            return engine.GetEnemyAircraftsInRange(Location, range);
         }
         #endregion Custom
     }
@@ -844,26 +1011,13 @@
         {
             return Attack(aircraft.aircraft);
         }
-        public bool TryAttack(Func<AircraftBase, double> ScoringFunction, bool OrderByDesecnding = true)
+        public Squad<AircraftBase> GetAircraftsInAttackRange()
         {
-            List<AircraftBase> options;
-            if (OrderByDesecnding)
-                options = GetAircraftsInAttackRange().OrderByDescending(x => ScoringFunction(x)).ToList();
-            else
-                options = GetAircraftsInAttackRange().OrderBy(x => ScoringFunction(x)).ToList();
-            if (options.Count > 0)
-            {
-                AircraftBase f = options.First();
-                if (ScoringFunction(f) <= 0)
-                    return false;
-                return Attack(options.First().aircraft);
-            }
-            else
-                return false;
+            return GetAircraftsInRange(AttackRange);
         }
-        public List<AircraftBase> GetAircraftsInAttackRange()
+        public Squad<AircraftBase> GetAircraftsInRange(int range)
         {
-            return engine.EnemyLivingAircrafts.Where(x => this.InAttackRange(x)).ToList();
+            return engine.GetEnemyAircraftsInRange(Location, range);
         }
         #endregion Custom
     }    class TradeShip : AircraftBase
@@ -978,6 +1132,16 @@
         }        public static Func<T, double> Times<T>(this Func<T, double> f, Func<T, double> other)
         {
             return new Func<T, double>(x => f(x) * other(x));
+        }        public static void AttachPlugin(this PirateLogic logic, PiratePlugin plugin)
+        {
+            PiratePlugin[] old = logic.Plugins;
+            PiratePlugin[] plugins = new PiratePlugin[old.Length + 1];
+            for(int i = 0; i < old.Length; i++)
+            {
+                plugins[i] = old[i];
+            }
+            plugins[old.Length] = plugin;
+            logic.Plugins = plugins;
         }    }    class PrioritizedActionList<T>    {        ConditioninalAction<T>[] actions;        public PrioritizedActionList(ConditioninalAction<T>[] actions)        {            this.actions = actions;        }        public bool invoke(T obj)        {            for (int i = 0; i < actions.Length; i++)            {                if (actions[i].invoke(obj))                    return true;            }            return false;        }    }    class ConditioninalAction<T>    {        private bool state;        private Func<T, bool> condition;        private Func<T, bool> action;        public ConditioninalAction(bool state, Func<T, bool> condition, Func<T, bool> action)        {            this.state = state;            this.condition = condition;            this.action = action;        }        public bool invoke(T obj)        {            if (condition.Invoke(obj) && state)            {                action(obj);                return true;            }            return false;        }        public bool invokeOnArray(T[] arr)        {            if (state)            {                foreach (T c in arr.Where(x => condition.Invoke(x)))                {                    if (action(c))                        return true;                }            }            return false;        }    }
     class DataStore : Dictionary<string, object>
     {
@@ -988,7 +1152,7 @@
 
         public void AssignLogic(PirateShip pirate, PirateLogic logic)
         {
-            this.Add("<Assignment>Pirate-" + pirate.Id, logic);
+            this.Add("[Wait]<Assignment>Pirate-" + pirate.Id, logic);
         }
         public bool TryGetLogic(PirateShip pirate, out PirateLogic logic)
         {
@@ -1004,7 +1168,7 @@
         public void AssignLogic(PirateSquad squad, PirateSquadLogic logic)
         {
             string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
-            this.Add("<Assignment>Squad-" + si, logic);
+            this.Add("[Wait]<Assignment>Squad-" + si, logic);
         }
         public List<List<int>> GetSquads()
         {
@@ -1033,7 +1197,7 @@
         }
         public void AssignLogic(TradeShip drone, DroneLogic logic)
         {
-            this.Add("<Assignment>Drone-" + drone.Id, logic);
+            this.Add("[Wait]<Assignment>Drone-" + drone.Id, logic);
         }
         public bool TryGetLogic(TradeShip drone, out DroneLogic logic)
         {
@@ -1051,6 +1215,18 @@
             foreach(string key in this.Keys)
             {
                 if (key.StartsWith("<Assignment>")) this.Remove(key);
+            }
+        }
+        public void NextTurn()
+        {
+            foreach(string key in this.Keys)
+            {
+                if (key.StartsWith("[Wait]"))
+                {
+                    object value = this[key];
+                    this.Remove(key);
+                    this.Add(key.Substring("[Wait]".Length), value);
+                }
             }
         }
     }
