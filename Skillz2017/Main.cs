@@ -1,6 +1,7 @@
 ﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        DataStore store = new DataStore();        public void DoTurn(PirateGame game)        {            try            {
                 GameEngine engine = game.Upgrade(store);
-                
+
+                store.FlushLogicAssignments();
             }            catch (Exception e)            {                game.Debug(e.StackTrace);            }        }    }
     #region Game Systems
     #region Basic Drones
@@ -139,23 +140,41 @@
             this.game = game;
         }
 
-        public void DoTurn(IndividualPirateGameLogic gl)
+        public void DoTurn(IndividualPirateGameLogic gl, bool RespectDataStoreAssignments = true)
         {
             foreach (PirateShip pirate in MyLivingPirates)
             {
-                gl.AssignPirateLogic(pirate).DoTurn(pirate);
+                PirateLogic pl;
+                if (RespectDataStoreAssignments && store.TryGetLogic(pirate, out pl)) { }
+                else pl = gl.AssignPirateLogic(pirate);
+                pl.DoTurn(pirate);
             }
             foreach (TradeShip drone in MyLivingDrones)
             {
-                gl.AssignDroneLogic(drone).DoTurn(drone);
+                DroneLogic dl;
+                if (RespectDataStoreAssignments && store.TryGetLogic(drone, out dl)) { }
+                else dl = gl.AssignDroneLogic(drone);
+                dl.DoTurn(drone);
             }
         }
-        public void DoTurn(PirateSquadGameLogic gl)
+        public void DoTurn(PirateSquadGameLogic gl, bool RespectDataStoreAssignments = true)
         {
-            foreach(PirateSquad squad in gl.AssignSquads(MyLivingPirates.Select(x => (PirateShip)x).ToArray()))
+            List<PirateSquad> Squads = new List<PirateSquad>();
+            PirateSquad APirates = new PirateSquad(this, MyLivingPirates);
+            if (RespectDataStoreAssignments)
             {
-                PirateSquadLogic sl = gl.AssignSquadLogic(squad);
-                Location dest = sl.CalculateDestination();
+                Squads.AddRange(store.GetSquads().Select(ids => {
+                    PirateSquad ps = PirateSquad.SquadFromIds(this, APirates, ids);
+                    APirates.FilterOutBySquad(ps);
+                    return ps;
+                    }));
+            }
+            Squads.AddRange(gl.AssignSquads(APirates.Select(x => (PirateShip)x).ToArray()));
+            foreach (PirateSquad squad in Squads)
+            {
+                PirateSquadLogic sl;
+                if (RespectDataStoreAssignments && store.TryGetLogic(squad, out sl)) { }
+                else sl = gl.AssignSquadLogic(squad);
                 int id = 0;
                 foreach(PirateShip ps in squad)
                 {
@@ -891,14 +910,26 @@
         }
         #endregion Extends
 
-        public Squad<T> FilterById(params int[] ids)
+        public Squad<T> FilterById(IEnumerable<int> ids)
         {
             return Filter(x => ids.Contains(x.Id));
+        }
+        public Squad<T> FilterOutById(IEnumerable<int> ids)
+        {
+            return Filter(x => !ids.Contains(x.Id));
+        }
+        public Squad<T> FilterOutBySquad(Squad<T> squad)
+        {
+            return FilterOutById(squad.Select(x => x.Id));
         }
     }
     class PirateSquad : Squad<PirateShip>
     {
-        private PirateSquad(GameEngine engine, IEnumerable<PirateShip> pirates) : base(engine, pirates) { }
+        public PirateSquad(GameEngine engine, IEnumerable<PirateShip> pirates) : base(engine, pirates) { }
+        public static PirateSquad SquadFromIds(GameEngine engine, IEnumerable<PirateShip> pirates, IEnumerable<int> ids)
+        {
+            return new PirateSquad(engine, pirates.Where(x => ids.Contains(x.Id)));
+        }
     }
     #endregion Aircrafts
     #region Utils    static class Extensions    {        public static bool isBetween(this Location loc, Location bound1, Location bound2)        {            return isBetween(loc.Row, bound1.Row, bound2.Row) && isBetween(loc.Col, bound1.Col, bound2.Col);        }        private static bool isBetween(int num, int bound1, int bound2)        {            if (bound1 > bound2)                return num >= bound2 && num <= bound1;            else                return num >= bound1 && num <= bound2;        }
@@ -953,6 +984,74 @@
         public DataStore() : base()
         {
 
+        }
+
+        public void AssignLogic(PirateShip pirate, PirateLogic logic)
+        {
+            this.Add("<Assignment>Pirate-" + pirate.Id, logic);
+        }
+        public bool TryGetLogic(PirateShip pirate, out PirateLogic logic)
+        {
+            logic = null;
+            if (ContainsKey("<Assignment>Pirate-" + pirate.Id))
+            {
+                logic = (PirateLogic)this["<Assignment>Pirate-" + pirate.Id];
+                return true;
+            }
+            else
+                return false;
+        }
+        public void AssignLogic(PirateSquad squad, PirateSquadLogic logic)
+        {
+            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
+            this.Add("<Assignment>Squad-" + si, logic);
+        }
+        public List<List<int>> GetSquads()
+        {
+            List<List<int>> squads = new List<List<int>>();
+            foreach(string key in this.Keys)
+            {
+                if (key.StartsWith("<Assignment>Squad-"))
+                {
+                    string si = key.Substring("<Assignment>Squad-".Length);
+                    squads.Add(si.Split(',').Select(x => int.Parse(x)).ToList());
+                }
+            }
+            return squads;
+        }
+        public bool TryGetLogic(PirateSquad squad, out PirateSquadLogic logic)
+        {
+            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
+            logic = null;
+            if (ContainsKey("<Assignment>Squad-" + si))
+            {
+                logic = (PirateSquadLogic)this["<Assignment>Squad-" + si];
+                return true;
+            }
+            else
+                return false;
+        }
+        public void AssignLogic(TradeShip drone, DroneLogic logic)
+        {
+            this.Add("<Assignment>Drone-" + drone.Id, logic);
+        }
+        public bool TryGetLogic(TradeShip drone, out DroneLogic logic)
+        {
+            logic = null;
+            if (ContainsKey("<Assignment>Drone-" + drone.Id))
+            {
+                logic = (DroneLogic)this["<Assignment>Drone-" + drone.Id];
+                return true;
+            }
+            else
+                return false;
+        }
+        public void FlushLogicAssignments()
+        {
+            foreach(string key in this.Keys)
+            {
+                if (key.StartsWith("<Assignment>")) this.Remove(key);
+            }
         }
     }
     #endregion Utils}
