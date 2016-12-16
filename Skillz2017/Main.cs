@@ -1,18 +1,13 @@
-﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    public class Bot : IPirateBot    {        DataStore store = new DataStore();        public void DoTurn(PirateGame game)        {            try            {
+﻿using System;using System.Collections.Generic;using System.Linq;using Pirates;namespace Skillz2017{    using Skillz2017;    public class Bot : IPirateBot    {        DataStore store = new DataStore();        public void DoTurn(PirateGame game)        {            try            {
                 store.NextTurn();
                 GameEngine engine = game.Upgrade(store);
-
+                engine.DoTurn(new IslandSpread(engine));
                 store.FlushLogicAssignments();
             }            catch (Exception e)            {                game.Debug(e.StackTrace);            }        }    }
     #region Game Systems
     #region Basic Drones
     class StupidDrone : DroneLogic
     {
-        GameEngine engine;
-        public StupidDrone(GameEngine engine)
-        {
-            this.engine = engine;
-        }
         public void DoTurn(TradeShip ship)
         {
             ship.SailToCity(ship.SailDefault);
@@ -20,11 +15,6 @@
     }
     class RandomDrone : DroneLogic
     {
-        GameEngine engine;
-        public RandomDrone(GameEngine engine)
-        {
-            this.engine = engine;
-        }
         public void DoTurn(TradeShip ship)
         {
             ship.SailToCity(ship.SailRandom);
@@ -32,11 +22,6 @@
     }
     class AvoidingDrone : DroneLogic
     {
-        GameEngine engine;
-        public AvoidingDrone(GameEngine engine)
-        {
-            this.engine = engine;
-        }
         public void DoTurn(TradeShip ship)
         {
             ship.SailToCity(ship.SailMinimizeShips);
@@ -44,7 +29,45 @@
     }
     #endregion BasicDrones
     #region Pirates
+    class EmptyPirate : PirateLogic
+    {
+        public override void DoTurn(PirateShip pirate)
+        {
+            
+        }
+    }
     #endregion Pirates
+    class IslandSpread : IndividualPirateGameLogic
+    {
+        PirateLogic[] logic = new PirateLogic[5];
+        GameEngine engine;
+        public IslandSpread(GameEngine engine)
+        {
+            this.engine = engine;
+        }
+
+        public DroneLogic AssignDroneLogic(TradeShip d)
+        {
+            return new AvoidingDrone();
+        }
+        public LogicedPirate[] AssignPirateLogic(PirateShip[] pss)
+        {
+            SmartIsland[] islands = engine.Islands.OrderBy(i =>            {                int score = 0;                if (engine.GetEnemyShipsInRange(i.Location, 7).Count == 0) score += 10;                if (i.IsTheirs) score += 5;                if (!i.IsTheirs && !i.IsOurs) score += 1;                return score;            }).ToArray();
+
+            LogicedPirate[] pirates = new LogicedPirate[pss.Length];
+            Squad<PirateShip> APirates = new Squad<PirateShip>(pss);
+            PirateShip camper = APirates.OrderBy(p => p.Distance(engine.EnemyCities[0])).First();
+            pirates[0] = new LogicedPirate(camper, new EmptyPirate().AttachPlugin(ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(1)).AttachPlugin(new CamperPlugin(engine, engine.EnemyCities[0].Location, ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(2))));
+            APirates = APirates.FilterOutById(camper.Id);
+            for(int i = 0; i < pss.Length-1; i++)
+            {
+                PirateShip s = APirates.OrderBy(p => p.Distance(islands[i].Location)).First();
+                APirates = APirates.FilterOutById(s.Id);
+                pirates[i+1] = new LogicedPirate(s, new EmptyPirate().AttachPlugin(ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.5)).AttachPlugin(new ConquerPlugin(islands[i],engine)));
+            }
+            return pirates;
+        }
+    }
     #region Pirate Plugins
     class ShootingPlugin : PiratePlugin
     {
@@ -68,6 +91,25 @@
             aircraft = null;
 
             List<AircraftBase> options = ship.GetAircraftsInRange(range);
+            if (OrderByDescending)
+                options = options.OrderByDescending(x => ScoringFunction(x)).ToList();
+            else
+                options = options.OrderBy(x => ScoringFunction(x)).ToList();
+            if (options.Count > 0)
+            {
+                aircraft = options.First();
+                if (ScoringFunction(aircraft) <= 0)
+                    return false;
+                return true;
+            }
+            else
+                return false;
+        }
+        public bool Scan(GameEngine engine, Location loc, int range, out AircraftBase aircraft, bool OrderByDescending = true)
+        {
+            aircraft = null;
+
+            List<AircraftBase> options = engine.GetEnemyAircraftsInRange(loc, range);
             if (OrderByDescending)
                 options = options.OrderByDescending(x => ScoringFunction(x)).ToList();
             else
@@ -140,11 +182,13 @@
     }
     class CamperPlugin : PiratePlugin
     {
+        GameEngine engine;
         Location Camp;
         ShootingPlugin shooter;
         int range;
-        public CamperPlugin(Location loc, ShootingPlugin shooter, int range = 7)
+        public CamperPlugin(GameEngine engine, Location loc, ShootingPlugin shooter, int range = 13)
         {
+            this.engine = engine;
             this.Camp = loc;
             this.shooter = shooter;
             this.range = range;
@@ -153,13 +197,26 @@
         public bool DoTurn(PirateShip ship)
         {
             AircraftBase craft;
-            if (shooter.Scan(ship, range, out craft))
+            if (ship.InRange(Camp, range))
             {
-                if (ship.InAttackRange(craft)) ship.Attack(craft.aircraft);
-                else ship.Sail(craft.Location, ship.SailMaximizeDrone);
+                if (shooter.Scan(engine, Camp, range, out craft))
+                {
+                    if (ship.InAttackRange(craft)) ship.Attack(craft.aircraft);
+                    else ship.Sail(craft.Location, ship.SailMaximizeDrone);
+                    return true;
+                }
+                else if (!ship.Location.Equals(Camp))
+                {
+                    ship.Sail(Camp, ship.SailDefault);
+                    return true;
+                }
+                else return false;
+            }
+            else
+            {
+                ship.Sail(Camp, ship.SailMaximizeDrone);
                 return true;
             }
-            return false;
         }
     }
     class AntiCamperPlugin : PiratePlugin
@@ -179,7 +236,7 @@
             {
                 City c = cities.First();
                 AircraftBase craft;
-                if (ship.InRange(c, range) && shooter.Scan(ship, range - ship.Distance(c), out craft))
+                if (ship.InRange(c, range) && shooter.Scan(engine, c.Location, range - ship.Distance(c), out craft))
                 {
                     if (ship.InAttackRange(craft)) ship.Attack(craft.aircraft);
                     else ship.Sail(craft.Location, ship.SailMaximizeDrone);
@@ -195,8 +252,23 @@
     #region Logic Interfaces
     interface IndividualPirateGameLogic
     {
-        PirateLogic AssignPirateLogic(PirateShip p);
+        LogicedPirate[] AssignPirateLogic(PirateShip[] p);
         DroneLogic AssignDroneLogic(TradeShip d);
+    }
+    class LogicedPirate
+    {
+        public readonly PirateShip s;
+        public readonly PirateLogic logic;
+        public LogicedPirate(PirateShip s, PirateLogic logic)
+        {
+            this.s = s;
+            this.logic = logic;
+        }
+
+        public void DoTurn()
+        {
+            logic.DoTurn(s);
+        }
     }
     abstract class PirateLogic
     {
@@ -212,13 +284,30 @@
     }
     interface PirateSquadGameLogic
     {
-        PirateSquad[] AssignSquads(PirateShip[] ships);
-        PirateSquadLogic AssignSquadLogic(PirateSquad psl);
+        LogicedPirateSquad[] AssignSquads(PirateShip[] ps);
         DroneLogic AssignDroneLogic(TradeShip d);
+    }
+    class LogicedPirateSquad
+    {
+        public readonly PirateSquad s;
+        public readonly PirateSquadLogic logic;
+        public LogicedPirateSquad(PirateSquad s, PirateSquadLogic logic)
+        {
+            this.s = s;
+            this.logic = logic;
+        }
+
+        public void DoTurn()
+        {
+            PirateShip[] pirates = s.ToArray();
+            for (int i = 0; i < pirates.Length; i++)
+            {
+                logic.AssignPirateLogic(pirates[i], i).DoTurnWithPlugins(pirates[i]);
+            }
+        }
     }
     interface PirateSquadLogic
     {
-        Location CalculateDestination();
         PirateLogic AssignPirateLogic(PirateShip pirate, int id);
     }
     interface DroneLogic
@@ -239,26 +328,21 @@
         }
         public GameEngine(PirateGame game) : this(game, new DataStore())
         {
-            this.game = game;
+            
         }
 
         public void DoTurn(IndividualPirateGameLogic gl, bool RespectDataStoreAssignments = true)
         {
-            foreach (PirateShip pirate in MyLivingPirates)
+            LogicedPirate[] pirates = gl.AssignPirateLogic(MyLivingPirates.ToArray());
+            for(int i = 0; i < pirates.Length; i++)
             {
-                PirateLogic pl;
-                if (RespectDataStoreAssignments && store.TryGetLogic(pirate, out pl)) { }
-                else pl = gl.AssignPirateLogic(pirate);
+                LogicedPirate pirate = pirates[i];
 
-                bool stop = false;
-                foreach(PiratePlugin plugin in pl.Plugins)
-                {
-                    if ((stop = plugin.DoTurn(pirate)))
-                        break;
-                    stop = stop || (!pirate.CanPlay);
-                }
-                if (!stop)
-                    pl.DoTurn(pirate);
+                PirateLogic pl;
+                if (RespectDataStoreAssignments && store.TryGetLogic(pirate.s, out pl)) { }
+                else pl = pirate.logic;
+
+                pl.DoTurnWithPlugins(pirate.s);
             }
 
             foreach (TradeShip drone in MyLivingDrones)
@@ -271,38 +355,24 @@
         }
         public void DoTurn(PirateSquadGameLogic gl, bool RespectDataStoreAssignments = true)
         {
-            List<PirateSquad> Squads = new List<PirateSquad>();
-            PirateSquad APirates = new PirateSquad(this, MyLivingPirates);
+            List<LogicedPirateSquad> Squads = new List<LogicedPirateSquad>();
+            PirateSquad APirates = new PirateSquad(MyLivingPirates);
             if (RespectDataStoreAssignments)
             {
                 Squads.AddRange(store.GetSquads().Select(ids => {
-                    PirateSquad ps = PirateSquad.SquadFromIds(this, APirates, ids);
+                    PirateSquad ps = PirateSquad.SquadFromIds(APirates, ids);
                     APirates.FilterOutBySquad(ps);
-                    return ps;
+                    PirateSquadLogic l;
+                    store.TryGetLogic(ps, out l);
+                    return new LogicedPirateSquad(ps, l);
                     }));
             }
             Squads.AddRange(gl.AssignSquads(APirates.Select(x => (PirateShip)x).ToArray()));
-            foreach (PirateSquad squad in Squads)
+            foreach(LogicedPirateSquad lps in Squads)
             {
-                PirateSquadLogic sl;
-                if (RespectDataStoreAssignments && store.TryGetLogic(squad, out sl)) { }
-                else sl = gl.AssignSquadLogic(squad);
-                int id = 0;
-                foreach(PirateShip ps in squad)
-                {
-                    PirateLogic pl = sl.AssignPirateLogic(ps, id);
-                    bool stop = false;
-                    foreach (PiratePlugin plugin in pl.Plugins)
-                    {
-                        if ((stop = plugin.DoTurn(ps)))
-                            break;
-                        stop = stop || (!ps.CanPlay);
-                    }
-                    if (!stop)
-                        pl.DoTurn(ps);
-                    id += 1;
-                }
+                lps.DoTurn();
             }
+            
 
             foreach (TradeShip drone in MyLivingDrones)
             {
@@ -379,7 +449,7 @@
         {
             get
             {
-                return game.GetEnemyLivingPirates().Where(x => IsAlive(x)).Squad(this);
+                return game.GetEnemyLivingPirates().Squad(this).Filter(x => x.IsAlive);
             }
         }
         public SmartIsland[] Islands
@@ -481,14 +551,14 @@
         {
             get
             {
-                return game.GetEnemyLivingAircrafts().Where(x => IsAlive(x)).Squad(this);
+                return game.GetEnemyLivingAircrafts().Squad(this).Filter(x => x.IsAlive);
             }
         }
         public Squad<TradeShip> EnemyLivingDrones
         {
             get
             {
-                return game.GetEnemyLivingDrones().Where(x => IsAlive(x)).Squad(this);
+                return game.GetEnemyLivingDrones().Squad(this).Filter(x => x.IsAlive);
             }
         }
         public PirateShip GetEnemyPirateById(int id)
@@ -706,20 +776,20 @@
             else return false;
         }        public Squad<TradeShip> GetEnemyDronesInRange(Location loc, int range)
         {
-            return new Squad<TradeShip>(this, EnemyLivingDrones.Where(x => x.InRange(loc, range)));
+            return EnemyLivingDrones.Filter(x => x.InRange(loc, range));
         }        public Squad<TradeShip> GetEnemyDronesInAttackRange(Location loc)
         {
             return GetEnemyDronesInRange(loc, AttackRange);
         }        public Squad<PirateShip> GetEnemyShipsInRange(Location loc, int range)
         {
-            return new Squad<PirateShip>(this, EnemyLivingPirates.Where(x => x.InRange(loc, range)));
+            return EnemyLivingPirates.Filter(x => x.InRange(loc, range));
         }        public Squad<PirateShip> GetEnemyShipsInAttackRange(Location loc)
         {
             return GetEnemyShipsInRange(loc, AttackRange);
         }
         public Squad<AircraftBase> GetEnemyAircraftsInRange(Location loc, int range)
         {
-            return new Squad<AircraftBase>(this, EnemyLivingAircrafts.Where(x => x.InRange(loc, range)));
+            return EnemyLivingAircrafts.Filter(x => x.InRange(loc, range));
         }
         #endregion Custom
     }
@@ -841,7 +911,7 @@
             {
                 return new Func<AircraftBase, double>(x =>
                 {
-                    return ((double)(x.MaxHealth - x.CurrentHealth)) / x.MaxHealth;
+                    return ((double)(x.CurrentHealth)) / x.MaxHealth;
                 });
             }
         }
@@ -889,6 +959,13 @@
             get
             {
                 return engine.CheckHealth(aircraft);
+            }
+        }
+        public bool IsAlive
+        {
+            get
+            {
+                return CurrentHealth > 0;
             }
         }
         public int MaxHealth
@@ -987,13 +1064,6 @@
                 return pirate.TurnsToRevive;
             }
         }
-        public bool Alive
-        {
-            get
-            {
-                return pirate.IsAlive();
-            }
-        }
         public bool InAttackRange(MapObject mapObject)
         {
             return pirate.InAttackRange(mapObject);
@@ -1046,27 +1116,32 @@
     }
     class Squad<T> : List<T> where T : AircraftBase
     {
-        GameEngine engine;
-        public Squad(GameEngine engine, IEnumerable<T> aircrafts) : base()
+        public Squad(IEnumerable<T> aircrafts) : base()
         {
-            this.engine = engine;
             this.AddRange(aircrafts);
         }
 
         #region Extends
         public Squad<T> Select(Func<T, T> Selector)
         {
-            return new Squad<T>(engine, this.AsEnumerable().Select(Selector));
+            return new Squad<T>(this.AsEnumerable().Select(Selector));
         }
         public Squad<T> Filter(Func<T, bool> Predicate)
         {
-            return new Squad<T>(engine, this.Where(Predicate));
+            return new Squad<T>(this.Where(Predicate));
         }
         #endregion Extends
-
+        public Squad<T> FilterById(params int[] id)
+        {
+            return FilterById(id.AsEnumerable());
+        }
         public Squad<T> FilterById(IEnumerable<int> ids)
         {
             return Filter(x => ids.Contains(x.Id));
+        }
+        public Squad<T> FilterOutById(params int[] id)
+        {
+            return FilterOutById(id.AsEnumerable());
         }
         public Squad<T> FilterOutById(IEnumerable<int> ids)
         {
@@ -1079,10 +1154,14 @@
     }
     class PirateSquad : Squad<PirateShip>
     {
-        public PirateSquad(GameEngine engine, IEnumerable<PirateShip> pirates) : base(engine, pirates) { }
-        public static PirateSquad SquadFromIds(GameEngine engine, IEnumerable<PirateShip> pirates, IEnumerable<int> ids)
+        public PirateSquad(IEnumerable<PirateShip> pirates) : base(pirates) { }
+        public static PirateSquad SquadFromIds(IEnumerable<PirateShip> pirates, params int[] ids)
         {
-            return new PirateSquad(engine, pirates.Where(x => ids.Contains(x.Id)));
+            return SquadFromIds(pirates, ids);
+        }
+        public static PirateSquad SquadFromIds(IEnumerable<PirateShip> pirates, IEnumerable<int> ids)
+        {
+            return new PirateSquad(pirates.Where(x => ids.Contains(x.Id)));
         }
     }
     #endregion Aircrafts
@@ -1120,20 +1199,20 @@
 
         public static Squad<PirateShip> Squad(this IEnumerable<Pirate> pirates, GameEngine engine)
         {
-            return new Squad<PirateShip>(engine, pirates.Select(p => p.Upgrade(engine)));
+            return new Squad<PirateShip>(pirates.Select(p => p.Upgrade(engine)));
         }
         public static Squad<TradeShip> Squad(this IEnumerable<Drone> drones, GameEngine engine)
         {
-            return new Squad<TradeShip>(engine, drones.Select(d => d.Upgrade(engine)));
+            return new Squad<TradeShip>(drones.Select(d => d.Upgrade(engine)));
         }
         public static Squad<AircraftBase> Squad(this IEnumerable<Aircraft> aircrafts, GameEngine engine)
         {
-            return new Squad<AircraftBase>(engine, aircrafts.Select(b => b.Upgrade(engine)));
+            return new Squad<AircraftBase>(aircrafts.Select(b => b.Upgrade(engine)));
         }        public static Func<T, double> Times<T>(this Func<T, double> f, Func<T, double> other)
         {
             return new Func<T, double>(x => f(x) * other(x));
-        }        public static void AttachPlugin(this PirateLogic logic, PiratePlugin plugin)
-        {
+        }        public static T AttachPlugin<T>(this T logic, PiratePlugin plugin) where T : PirateLogic
+        { 
             PiratePlugin[] old = logic.Plugins;
             PiratePlugin[] plugins = new PiratePlugin[old.Length + 1];
             for(int i = 0; i < old.Length; i++)
@@ -1142,12 +1221,24 @@
             }
             plugins[old.Length] = plugin;
             logic.Plugins = plugins;
+            return logic;
+        }        public static void DoTurnWithPlugins(this PirateLogic logic, PirateShip ship)
+        {
+            bool stop = false;
+            foreach (PiratePlugin plugin in logic.Plugins)
+            {
+                if ((stop = plugin.DoTurn(ship)))
+                    break;
+                stop = stop || (!ship.CanPlay);
+            }
+            if (!stop)
+                logic.DoTurn(ship);
         }    }    class PrioritizedActionList<T>    {        ConditioninalAction<T>[] actions;        public PrioritizedActionList(ConditioninalAction<T>[] actions)        {            this.actions = actions;        }        public bool invoke(T obj)        {            for (int i = 0; i < actions.Length; i++)            {                if (actions[i].invoke(obj))                    return true;            }            return false;        }    }    class ConditioninalAction<T>    {        private bool state;        private Func<T, bool> condition;        private Func<T, bool> action;        public ConditioninalAction(bool state, Func<T, bool> condition, Func<T, bool> action)        {            this.state = state;            this.condition = condition;            this.action = action;        }        public bool invoke(T obj)        {            if (condition.Invoke(obj) && state)            {                action(obj);                return true;            }            return false;        }        public bool invokeOnArray(T[] arr)        {            if (state)            {                foreach (T c in arr.Where(x => condition.Invoke(x)))                {                    if (action(c))                        return true;                }            }            return false;        }    }
     class DataStore : Dictionary<string, object>
     {
         public DataStore() : base()
         {
-
+            
         }
 
         public void AssignLogic(PirateShip pirate, PirateLogic logic)
@@ -1157,13 +1248,11 @@
         public bool TryGetLogic(PirateShip pirate, out PirateLogic logic)
         {
             logic = null;
-            if (ContainsKey("<Assignment>Pirate-" + pirate.Id))
-            {
-                logic = (PirateLogic)this["<Assignment>Pirate-" + pirate.Id];
-                return true;
-            }
-            else
-                return false;
+            object obj;
+            bool res = TryGetValue("<Assignment>Pirate-" + pirate.Id, out obj);
+            if (res)
+                logic = (PirateLogic)obj;
+            return res;
         }
         public void AssignLogic(PirateSquad squad, PirateSquadLogic logic)
         {
@@ -1185,15 +1274,13 @@
         }
         public bool TryGetLogic(PirateSquad squad, out PirateSquadLogic logic)
         {
-            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
             logic = null;
-            if (ContainsKey("<Assignment>Squad-" + si))
-            {
-                logic = (PirateSquadLogic)this["<Assignment>Squad-" + si];
-                return true;
-            }
-            else
-                return false;
+            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
+            object obj;
+            bool res = TryGetValue("<Assignment>Squad-" + si, out obj);
+            if (res)
+                logic = (PirateSquadLogic)obj;
+            return res;
         }
         public void AssignLogic(TradeShip drone, DroneLogic logic)
         {
@@ -1202,13 +1289,11 @@
         public bool TryGetLogic(TradeShip drone, out DroneLogic logic)
         {
             logic = null;
-            if (ContainsKey("<Assignment>Drone-" + drone.Id))
-            {
-                logic = (DroneLogic)this["<Assignment>Drone-" + drone.Id];
-                return true;
-            }
-            else
-                return false;
+            object obj;
+            bool res = TryGetValue("<Assignment>Drone-" + drone.Id, out obj);
+            if (res)
+                logic = (DroneLogic)obj;
+            return res;
         }
         public void FlushLogicAssignments()
         {
