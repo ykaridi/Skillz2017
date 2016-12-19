@@ -45,7 +45,6 @@ namespace Skillz2017
 
             ShootingPlugin NTD_DOP = ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.9);
             ShootingPlugin NTP = ShootingPlugin.PrioritizeByNearnessToDeath();
-            ShootingPlugin NTP_PO = ShootingPlugin.PrioritizeByNearnessToDeath().PiratesOnly();
             return ps.Select(p =>
             {
                 PirateLogic l;
@@ -61,22 +60,22 @@ namespace Skillz2017
                         }
                     case 1:
                         {
-                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4], engine));
+                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4]));
                             break;
                         }
                     case 2:
                         {
-                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4], engine));
+                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4]));
                             break;
                         }
                     case 3:
                         {
-                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new AntiCamperPlugin(engine)).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4], engine));
+                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new AntiCamperPlugin(engine)).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4]));
                             break;
                         }
                     case 4:
                         {
-                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4], engine));
+                            l = new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(engine.Islands[(p.Id - 1 + r) % 4]));
                             break;
                         }
                     default:
@@ -105,7 +104,6 @@ namespace Skillz2017
         {
             ShootingPlugin NTD_DOP = ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.9);
             ShootingPlugin NTP = ShootingPlugin.PrioritizeByNearnessToDeath();
-            ShootingPlugin NTP_PO = ShootingPlugin.PrioritizeByNearnessToDeath().PiratesOnly();
 
             SmartIsland[] islands = engine.Islands.OrderBy(i =>
             {
@@ -133,7 +131,8 @@ namespace Skillz2017
             {
                 PirateShip s = APirates.OrderBy(p => p.Distance(islands[i])).First();
                 APirates = APirates.FilterOutById(s.Id);
-                pirates[i + baseIdx] = new LogicedPirate(s, new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(islands[i], engine)));            }
+                pirates[i + baseIdx] = new LogicedPirate(s, new EmptyPirate().AttachPlugin(NTP).AttachPlugin(new ConquerPlugin(islands[i])));
+            }
             return pirates;
         }
     }
@@ -281,12 +280,10 @@ namespace Skillz2017
     class ConquerPlugin : PiratePlugin
     {
         SmartIsland island;
-        GameEngine engine;
         bool InRangeOnly;
-        public ConquerPlugin(SmartIsland island, GameEngine engine, bool InRangeOnly = false)
+        public ConquerPlugin(SmartIsland island, bool InRangeOnly = false)
         {
             this.island = island;
-            this.engine = engine;
             this.InRangeOnly = InRangeOnly;
         }
 
