@@ -1,0 +1,6 @@
+language: csharp
+solution: "Skillz2017.sln"
+install:
+- travis_retry nuget restore -source "https://www.nuget.org/api/v2" Skillz2017.sln
+script:
+- xbuild Skillz2017.sln
