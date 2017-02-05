@@ -5,28 +5,30 @@ using Pirates;
 
 namespace Skillz2017
 {
-    using Skillz2017;
     public class Bot : IPirateBot
     {
         internal static GameEngine Engine;
+        private IslandSpreadStatic logic;
+        public Bot()
+        {
+            logic = new IslandSpreadStatic();
+            Engine = new GameEngine();
+        }
 
-        DataStore store = new DataStore();
         public void DoTurn(PirateGame game)
         {
             try
             {
-                store.NextTurn();
-                GameEngine engine = game.Upgrade(store);
-                Engine = engine;
-                IslandSpreadStatic logic = new IslandSpreadStatic();
-                engine.DoTurn(logic, logic);
+                Engine.Update(game);
+                Engine.store.NextTurn();
+                Engine.DoTurn(logic, logic);
                 game.Debug("Store [");
-                store.Keys.ToList().ForEach(k =>
+                Engine.store.Keys.ToList().ForEach(k =>
                 {
-                    game.Debug("\t{" + k + "," + store[k] + "}");
+                    game.Debug("\t{" + k + "," + Engine.store[k] + "}");
                 });
                 game.Debug("];");
-                store.Flush();
+                Engine.store.Flush();
             }
             catch (Exception e)
             {
@@ -711,13 +713,17 @@ namespace Skillz2017
     #region Game Classes
     class GameEngine
     {
-        public readonly Random random = new Random();
+        public GameEngine()
+        {
+            random = new Random();
+        }
+
+        public readonly Random random;
         public const int CampRange = 5;
         public Dictionary<int, int> HitList = new Dictionary<int, int>();
         public Dictionary<int, bool> MoveList = new Dictionary<int, bool>();
-        public readonly DataStore store;
-
-        protected readonly PirateGame game;
+        internal DataStore store { get; private set; }
+        protected PirateGame game { get; private set; }
         public GameEngine(PirateGame game, DataStore store)
         {
             this.game = game;
@@ -732,6 +738,10 @@ namespace Skillz2017
         public GameEngine(PirateGame game) : this(game, new DataStore())
         {
 
+        }
+        public void Update(PirateGame pg)
+        {
+            this.game = pg;
         }
 
         public void DoTurn(IndividualPirateHandler ph, IndividualDroneHandler dh, bool RespectDataStoreAssignments = true)
