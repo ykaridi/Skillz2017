@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Pirates;
 
@@ -30,7 +29,7 @@ namespace Skillz2017
                 game.Debug("];");
                 Engine.store.Flush();
             }
-            catch (Exception e)
+            catch (System.Exception e)
             {
                 game.Debug(e.StackTrace);
             }
@@ -294,8 +293,8 @@ namespace Skillz2017
     #region Pirate Plugins
     class ShootingPlugin : PiratePlugin
     {
-        Func<AircraftBase, double> ScoringFunction;
-        public ShootingPlugin(Func<AircraftBase, double> ScoringMehtod)
+        System.Func<AircraftBase, double> ScoringFunction;
+        public ShootingPlugin(System.Func<AircraftBase, double> ScoringMehtod)
         {
             this.ScoringFunction = ScoringMehtod;
         }
@@ -328,7 +327,7 @@ namespace Skillz2017
             else
                 return false;
         }
-        public bool Scan(MapObject loc, int range, Func<AircraftBase, bool> Filter, out AircraftBase aircraft, bool OrderByDescending = true)
+        public bool Scan(MapObject loc, int range, System.Func<AircraftBase, bool> Filter, out AircraftBase aircraft, bool OrderByDescending = true)
         {
             aircraft = null;
 
@@ -403,10 +402,10 @@ namespace Skillz2017
     }
     class EscortPlugin : PiratePlugin
     {
-        Func<TradeShip> TargetFunc;
+        System.Func<TradeShip> TargetFunc;
         ShootingPlugin shooter;
-        public EscortPlugin(Func<TradeShip> TargetFunc) : this(TargetFunc, ShootingPlugin.PrioritizeByNearnessToDeath().PiratesOnly()) { }
-        public EscortPlugin(Func<TradeShip> TargetFunc, ShootingPlugin shooter)
+        public EscortPlugin(System.Func<TradeShip> TargetFunc) : this(TargetFunc, ShootingPlugin.PrioritizeByNearnessToDeath().PiratesOnly()) { }
+        public EscortPlugin(System.Func<TradeShip> TargetFunc, ShootingPlugin shooter)
         {
             this.TargetFunc = TargetFunc;
             this.shooter = shooter;
@@ -492,8 +491,8 @@ namespace Skillz2017
     }
     class KillerPlugin : PiratePlugin
     {
-        Func<AircraftBase> TargetFunc;
-        public KillerPlugin(Func<AircraftBase> TargetFunc)
+        System.Func<AircraftBase> TargetFunc;
+        public KillerPlugin(System.Func<AircraftBase> TargetFunc)
         {
             this.TargetFunc = TargetFunc;
         }
@@ -549,11 +548,11 @@ namespace Skillz2017
 
             if (Bot.Engine.GetAircraftsOn(ship).Filter(y => y.IsOurs && y.Type == AircraftType.Drone).Count() < minSize) return false;
 
-            int rd = Math.Abs(ship.Location.Row - city.Location.Row) + 1;
-            int cd = Math.Abs(ship.Location.Col - city.Location.Col) + 1;
+            int rd = System.Math.Abs(ship.Location.Row - city.Location.Row) + 1;
+            int cd = System.Math.Abs(ship.Location.Col - city.Location.Col) + 1;
 
-            int mr = Math.Min(ship.Location.Row, city.Location.Row);
-            int mc = Math.Min(ship.Location.Col, city.Location.Col);
+            int mr = System.Math.Min(ship.Location.Row, city.Location.Row);
+            int mc = System.Math.Min(ship.Location.Col, city.Location.Col);
             IEnumerable<Location> possibleLocs = Enumerable.Range(0, rd * cd).Select(x => new Location(mr + (x / rd), mc + (x % rd))).Where(x => x.Distance(ship) > 0 && x.Distance(ship) < maxDistance).OrderByDescending(x =>
                 {
                     return Bot.Engine.GetAircraftsOn(x).Filter(y => y.IsOurs && y.Type == AircraftType.Drone).Count;
@@ -630,9 +629,11 @@ namespace Skillz2017
     }
     class LogicedPirateSquad
     {
+        public delegate void Logic();
+
         public readonly LogicedPirate[] lps;
         public readonly PirateSquad s;
-        public readonly Action logic;
+        public readonly Logic logic;
         public LogicedPirateSquad(PirateSquad s, PirateSquadLogic logic)
         {
             this.s = s;
@@ -647,7 +648,7 @@ namespace Skillz2017
 
         public void DoTurn()
         {
-            logic();
+            logic.Invoke();
         }
     }
     interface PirateSquadLogic
@@ -656,9 +657,11 @@ namespace Skillz2017
     }
     class LogicedDroneSquad
     {
+        public delegate void Logic();
+
         public readonly DroneSquad s;
         public readonly LogicedDrone[] lds;
-        public readonly Action logic;
+        public readonly Logic logic;
         public LogicedDroneSquad(DroneSquad s, DroneSquadLogic logic)
         {
             this.s = s;
@@ -715,33 +718,27 @@ namespace Skillz2017
     {
         public GameEngine()
         {
-            random = new Random();
+            random = new System.Random();
+            store = new DataStore();
         }
 
-        public readonly Random random;
+        public readonly System.Random random;
         public const int CampRange = 5;
-        public Dictionary<int, int> HitList = new Dictionary<int, int>();
-        public Dictionary<int, bool> MoveList = new Dictionary<int, bool>();
+        public Dictionary<int, int> HitList;
+        public Dictionary<int, bool> MoveList;
         internal DataStore store { get; private set; }
         protected PirateGame game { get; private set; }
-        public GameEngine(PirateGame game, DataStore store)
+        public void Update(PirateGame pg)
         {
-            this.game = game;
-            this.store = store;
+            HitList = new Dictionary<int, int>();
+            MoveList = new Dictionary<int, bool>();
+            this.game = pg;
 
             this.MyLivingAircrafts.ForEach(aircraft =>
             {
                 MarkOnList(aircraft.aircraft, true);
             });
             RefreshCampCheck();
-        }
-        public GameEngine(PirateGame game) : this(game, new DataStore())
-        {
-
-        }
-        public void Update(PirateGame pg)
-        {
-            this.game = pg;
         }
 
         public void DoTurn(IndividualPirateHandler ph, IndividualDroneHandler dh, bool RespectDataStoreAssignments = true)
@@ -1150,7 +1147,7 @@ namespace Skillz2017
         {
             RandomSail(aircraft.aircraft, destination);
         }
-        public void Sail(Aircraft aircraft, MapObject destination, Func<Location, double> ScoreFunction, bool OrderByAscending = true)
+        public void Sail(Aircraft aircraft, MapObject destination, System.Func<Location, double> ScoreFunction, bool OrderByAscending = true)
         {
             List<Location> locs = GetSailOptions(aircraft, destination);
             Location l;
@@ -1160,7 +1157,7 @@ namespace Skillz2017
                 l = locs.OrderByDescending(ScoreFunction).First();
             SetSail(aircraft, l);
         }
-        public void Sail(AircraftBase aircraft, MapObject destination, Func<Location, double> ScoreFunction, bool OrderByAscending = true)
+        public void Sail(AircraftBase aircraft, MapObject destination, System.Func<Location, double> ScoreFunction, bool OrderByAscending = true)
         {
             Sail(aircraft.aircraft, destination, ScoreFunction, OrderByAscending);
         }
@@ -1375,61 +1372,62 @@ namespace Skillz2017
     class AircraftBase : MapObject
     {
         #region Sailing Functions
-        public Action<Aircraft, Location> SailMaximizeDrone
+        public delegate void SailingFunction(Aircraft ac, Location l);
+        public SailingFunction SailMaximizeDrone
         {
             get
             {
-                return new Action<Aircraft, Location>((ac, l) =>
+                return ((ac, l) =>
                 {
                     Bot.Engine.Sail(ac, l, loc => Bot.Engine.GetEnemyDronesInAttackRange(loc).Count, false);
                 });
             }
         }
-        public Action<Aircraft, Location> SailMinimizeShips
+        public SailingFunction SailMinimizeShips
         {
             get
             {
-                return new Action<Aircraft, Location>((ac, l) =>
+                return ((ac, l) =>
                 {
                     Bot.Engine.Sail(ac, l, loc => Bot.Engine.GetEnemyShipsInRange(loc, 7).Count, true);
                 });
             }
         }
-        public Action<Aircraft, Location> SailMaximizeShipDistance
+        public SailingFunction SailMaximizeShipDistance
         {
             get
             {
-                return new Action<Aircraft, Location>((ac, l) =>
+                return ((ac, l) =>
                 {
-                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => Math.Pow(p.Distance(loc),2)).Sum(), false);
+                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => System.Math.Pow(p.Distance(loc),2)).Sum(), false);
                 });
             }
         }
-        public Action<Aircraft, Location> SailMaximizeDistanceFromMiddle
+        public SailingFunction SailMaximizeDistanceFromMiddle
         {
             get
             {
-                return new Action<Aircraft, Location>((ac, l) =>
+                return ((ac, l) =>
                 {
                     Bot.Engine.Sail(ac, l, loc => loc.Distance(new Location(Bot.Engine.Rows / 2, Bot.Engine.Columns / 2)), false);
                 });
             }
         }
-        public Action<Aircraft, Location> SailDefault
+        public SailingFunction SailDefault
         {
             get
             {
-                return new Action<Aircraft, Location>((ac, l) =>
+                return ((ac, l) =>
                 {
                     Bot.Engine.Sail(ac, l);
                 });
             }
         }
-        public Action<Aircraft, Location> SailRandom
+        public SailingFunction SailRandom
         {
             get
             {
-                return new Action<Aircraft, Location>((ac, l) =>
+                return ((ac, l) =>
                 {
                     Bot.Engine.RandomSail(ac, l);
                 });
@@ -1437,63 +1435,63 @@ namespace Skillz2017
         }
         #endregion Sailing Functions
         #region Shooting Functions
-        public static Func<AircraftBase, double> ShootDronesOnly
+        public static System.Func<AircraftBase, double> ShootDronesOnly
         {
             get
             {
-                return new Func<AircraftBase, double>(x =>
+                return new System.Func<AircraftBase, double>(x =>
                 {
                     if (x.Type == AircraftType.Drone) return 1;
                     else return 0;
                 });
             }
         }
-        public static Func<AircraftBase, double> ShootPiratesOnly
+        public static System.Func<AircraftBase, double> ShootPiratesOnly
         {
             get
             {
-                return new Func<AircraftBase, double>(x =>
+                return new System.Func<AircraftBase, double>(x =>
                 {
                     if (x.Type == AircraftType.Pirate) return 1;
                     else return 0;
                 });
             }
         }
-        public static Func<AircraftBase, double> ShootByCurrentHealth
+        public static System.Func<AircraftBase, double> ShootByCurrentHealth
         {
             get
             {
-                return new Func<AircraftBase, double>(x =>
+                return new System.Func<AircraftBase, double>(x =>
                 {
                     return x.CurrentHealth;
                 });
             }
         }
-        public static Func<AircraftBase, double> ShootByDamageTaken
+        public static System.Func<AircraftBase, double> ShootByDamageTaken
         {
             get
             {
-                return new Func<AircraftBase, double>(x =>
+                return new System.Func<AircraftBase, double>(x =>
                 {
                     return x.MaxHealth - x.CurrentHealth;
                 });
             }
         }
-        public static Func<AircraftBase, double> ShootRegular
+        public static System.Func<AircraftBase, double> ShootRegular
         {
             get
             {
-                return new Func<AircraftBase, double>(x =>
+                return new System.Func<AircraftBase, double>(x =>
                 {
                     return 1;
                 });
             }
         }
-        public static Func<AircraftBase, double> ShootByNearnessToDeath
+        public static System.Func<AircraftBase, double> ShootByNearnessToDeath
         {
             get
             {
-                return new Func<AircraftBase, double>(x =>
+                return new System.Func<AircraftBase, double>(x =>
                 {
                     return ((double)(x.MaxHealth - x.CurrentHealth)) / x.MaxHealth + 1;
                 });
@@ -1623,13 +1621,13 @@ namespace Skillz2017
         {
             Bot.Engine.RandomSail(this, loc);
         }
-        public void Sail(MapObject loc, Func<Location, Double> ScoreFunction, bool OrderByAscending = true)
+        public void Sail(MapObject loc, System.Func<Location, double> ScoreFunction, bool OrderByAscending = true)
         {
             Bot.Engine.Sail(this, loc, ScoreFunction, OrderByAscending);
         }
-        public void Sail(MapObject loc, Action<Aircraft, Location> SailFunction)
+        public void Sail(MapObject loc, SailingFunction SailFunction)
         {
-            SailFunction.Invoke(aircraft, loc.GetLocation());
+            SailFunction(aircraft, loc.GetLocation());
         }
         public override Location GetLocation()
         {
@@ -1739,11 +1737,11 @@ namespace Skillz2017
         }
 
         #region Extends
-        public Squad<T> Select(Func<T, T> Selector)
+        public Squad<T> Select(System.Func<T, T> Selector)
         {
             return new Squad<T>(this.AsEnumerable().Select(Selector));
         }
-        public Squad<T> Filter(Func<T, bool> Predicate)
+        public Squad<T> Filter(System.Func<T, bool> Predicate)
         {
             return new Squad<T>(this.Where(Predicate));
         }
@@ -1834,15 +1832,6 @@ namespace Skillz2017
         {
             return new TradeShip(drone);
         }
-        public static GameEngine Upgrade(this PirateGame game)
-        {
-            return new GameEngine(game);
-        }
-        public static GameEngine Upgrade(this PirateGame game, DataStore store)
-        {
-            return new GameEngine(game, store);
-        }
-
         public static Squad<PirateShip> Squad(this IEnumerable<Pirate> pirates)
         {
             return new Squad<PirateShip>(pirates.Select(p => p.Upgrade()));
@@ -1920,72 +1909,30 @@ namespace Skillz2017
                 return num >= bound1 && num <= bound2;
         }
 
-        public static Func<T, double> Times<T>(this Func<T, double> f, Func<T, double> other)
+        public static System.Func<T, double> Times<T>(this System.Func<T, double> f, System.Func<T, double> other)
         {
-            return new Func<T, double>(x => f(x) * other(x));
+            return new System.Func<T, double>(x => f(x) * other(x));
         }
         public static bool IsEmpty<T>(this IEnumerable<T> source)
         {
             return !source.Any();
         }
-        public static T Transform<T>(this T arg, bool Condition, Func<T, T> Transformation)
+        public static T Transform<T>(this T arg, bool Condition, System.Func<T, T> Transformation)
         {
             if (Condition)
                 return Transformation(arg);
             else return arg;
         }
-    }
-    class PrioritizedActionList<T>
-    {
-        ConditioninalAction<T>[] actions;
-        public PrioritizedActionList(ConditioninalAction<T>[] actions)
-        {
-            this.actions = actions;
-        }
 
-        public bool invoke(T obj)
+        public static string Join(this string[] arr, string delimiter)
         {
-            for (int i = 0; i < actions.Length; i++)
+            string str = "";
+            foreach(string s in arr)
             {
-                if (actions[i].invoke(obj))
-                    return true;
+                str += delimiter;
+                str += s;
             }
-            return false;
-        }
-    }
-    class ConditioninalAction<T>
-    {
-        private bool state;
-        private Func<T, bool> condition;
-        private Func<T, bool> action;
-        public ConditioninalAction(bool state, Func<T, bool> condition, Func<T, bool> action)
-        {
-            this.state = state;
-            this.condition = condition;
-            this.action = action;
-        }
-
-        public bool invoke(T obj)
-        {
-            if (condition.Invoke(obj) && state)
-            {
-                action(obj);
-                return true;
-            }
-            return false;
-        }
-
-        public bool invokeOnArray(T[] arr)
-        {
-            if (state)
-            {
-                foreach (T c in arr.Where(x => condition.Invoke(x)))
-                {
-                    if (action(c))
-                        return true;
-                }
-            }
-            return false;
+            return str.Substring(1);
         }
     }
     class DataStore : Dictionary<string, object>
@@ -2010,7 +1957,7 @@ namespace Skillz2017
         }
         public void AssignLogic(PirateSquad squad, PirateSquadLogic logic)
         {
-            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
+            string si = "[" + squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray().Join(",") + "]";
             this["[Wait]<Assignment>PSquad-" + si] = logic;
         }
         public List<List<int>> GetPirateSquads()
@@ -2029,7 +1976,7 @@ namespace Skillz2017
         public bool TryGetLogic(PirateSquad squad, out PirateSquadLogic logic)
         {
             logic = null;
-            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
+            string si = "[" + squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray().Join(",") + "]";
             object obj;
             bool res = TryGetValue("<Assignment>PSquad-" + si, out obj);
             if (res)
@@ -2038,7 +1985,7 @@ namespace Skillz2017
         }
         public void AssignLogic(DroneSquad squad, DroneSquadLogic logic)
         {
-            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
+            string si = "[" + squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray().Join(",") + "]";
             this["[Wait]<Assignment>DSquad-" + si] = logic;
         }
         public List<List<int>> GetDroneSquads()
@@ -2057,7 +2004,7 @@ namespace Skillz2017
         public bool TryGetLogic(DroneSquad squad, out DroneSquadLogic logic)
         {
             logic = null;
-            string si = "[" + String.Join(",", squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray()) + "]";
+            string si = "[" + squad.Select(x => x.Id.ToString()).OrderBy(x => x).ToArray().Join(",") + "]";
             object obj;
             bool res = TryGetValue("<Assignment>DSquad-" + si, out obj);
             if (res)
