@@ -43,16 +43,14 @@ namespace Skillz2017
     class DynamicAssignmentMarkII : SquadPirateHandler, IndividualDroneHandler
     {
         List<int> SUpper;
-        List<int> SLower;
         public DynamicAssignmentMarkII()
         {
             SUpper = new int[] { 0, 1, 2 }.ToList();
-            SLower = new int[] { 3, 4 }.ToList();
         }
 
         public DroneLogic AssignDroneLogic(TradeShip d)
         {
-            return new AvoidingDrone().Transform(Bot.Engine.GetEnemyShipsInRange(Bot.Engine.MyCities[0], 5).Count > 0, x => x.AttachPlugin(new DroneGatherPlugin(1, 6, 10, 6)));
+            return new AvoidingDrone().Transform(Bot.Engine.GetEnemyShipsInRange(Bot.Engine.MyCities[0], 5).Count > 0, x => x.AttachPlugin(new DronePackingPlugin(5, 6)).AttachPlugin(new DroneGatherPlugin(1, 7, 10, 6)));
         }
 
         public LogicedPirateSquad[] AssignSquads(PirateShip[] ps)
@@ -60,7 +58,8 @@ namespace Skillz2017
             PirateSquad APirates = new PirateSquad(ps);
             PirateSquad Upper = new PirateSquad(APirates.FilterById(SUpper.ToArray()));
             APirates = new PirateSquad(APirates.FilterOutBySquad(Upper));
-            while (Upper.Count() < SUpper.Count() && APirates.Count() > 0)
+
+            while (Upper.Count() < SUpper.Count() && APirates.Count() > 1)
             {
                 int dead = SUpper.First(i => !Bot.Engine.GetMyPirateById(i).IsAlive);
                 SUpper.Remove(dead);
@@ -71,27 +70,12 @@ namespace Skillz2017
             }
             PirateSquad Lower = APirates;
 
-            /*
-            PirateSquad APirates = new PirateSquad(ps);
-            PirateSquad Lower = new PirateSquad(APirates.FilterById(SLower.ToArray()));
-            APirates = new PirateSquad(APirates.FilterOutBySquad(Lower));
-            while (Lower.Count() < SLower.Count)
-            {
-                int dead = SLower.First(i => !Bot.Engine.GetMyPirateById(i).IsAlive);
-                SLower.Remove(dead);
-                PirateShip p = APirates.OrderBy(x => Lower.Sum(y => x.Distance(y))).First();
-                SLower.Add(p.Id);
-                Lower.Add(p);
-            }
-            PirateSquad Upper = APirates;
-            */
-
             SmartIsland ei = Bot.Engine.Islands.OrderBy(x => x.Distance(Bot.Engine.EnemyCities[0])).First();
             SmartIsland li = Bot.Engine.Islands[3];
 
             return new LogicedPirateSquad[]
             {
-                new LogicedPirateSquad(Lower, Bot.Engine.EnemyLivingDrones.Count > 7 ? (false ? new PSL(ei) as PirateSquadLogic : new MPSL() as PirateSquadLogic) : new PSL(li) as PirateSquadLogic),
+                new LogicedPirateSquad(Lower, Bot.Engine.EnemyLivingDrones.Count > 7 ? (Bot.Engine.Enemy.Score > 20 ? new CPSL() as PirateSquadLogic : new MPSL() as PirateSquadLogic) : new PSL(li) as PirateSquadLogic),
                 new LogicedPirateSquad(Upper, Bot.Engine.Islands.ToList().TrueForAll(x => x.Id == 3 || x.IsOurs) ? new MPSL() as PirateSquadLogic : new PSL(Bot.Engine.NotMyIslands.Where(x => x.Id != 3).OrderBy(x => Upper.Sum(y => y.Distance(x))).First()))
             };
         }
@@ -138,11 +122,15 @@ namespace Skillz2017
         {
             public void DoTurn(PirateSquad ps)
             {
-                CamperPlugin cp = new CamperPlugin(Bot.Engine.Islands[3].Location.Add(-5, 0), ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.9), range: 8);
+                ShootingPlugin dShooter = ShootingPlugin.PrioritizeByHealth().DronesOnly();
+                ShootingPlugin shooter = ShootingPlugin.PrioritizeByNearnessToDeath().PiratesOnly();
+                CamperPlugin cp = new CamperPlugin(Bot.Engine.Islands[3].Location.Add(-5, 0), ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(1.1), range: 8);
                 ps.ForEach(x =>
                 {
                     if (x.CurrentHealth >= 2)
-                        cp.DoTurn(x);
+                        if (!shooter.DoTurn(x)) cp.DoTurn(x);
+                        else
+                            dShooter.DoTurn(x);
                 });
             }
         }
@@ -170,37 +158,10 @@ namespace Skillz2017
             City ec = Bot.Engine.EnemyCities[0];
             LogicedPirateSquad CS = new LogicedPirateSquad(new PirateSquad(APirates.OrderBy(x => x.Distance(ec)).Take(Bot.Engine.EnemyLivingDrones.Count > 3 ? 1 : 0)), new CPSL());
             APirates = new PirateSquad(APirates.FilterOutBySquad(CS.s));
-            /*LogicedPirateSquad[] pss = Bot.Engine.MyIslands.OrderByDescending(x => Bot.Engine.GetAircraftsOn(x).Count(a => a.Type == AircraftType.Drone)).Select(i =>
-            {
-                PirateSquad c = new PirateSquad(APirates.OrderBy(x => x.Distance(i)).Take(1));
-                APirates = new PirateSquad(APirates.FilterOutBySquad(c));
-                return new LogicedPirateSquad(c, new PSL(i));
-            }).ToArray();
-            pss = pss.Concat(APirates.GroupBy(x => x.Location, new LocationComparer()).Select(x =>
-            {
-                PirateSquad c = new PirateSquad(x);
-                APirates = new PirateSquad(APirates.FilterOutBySquad(c));
-                Location m = c.Middle;
-                SmartIsland si = Bot.Engine.NotMyIslands.OrderBy(i => i.Distance(m)).First();
-                return new LogicedPirateSquad(c, new PSL(si));
-            })).ToArray();*/
             List<SmartIsland> si = Bot.Engine.NotMyIslands.ToList();
             List<LogicedPirateSquad> pss = new List<LogicedPirateSquad>();
             while (!APirates.IsEmpty())
             {
-                /*
-                PirateShip cp = APirates.First();
-                PirateSquad c = new PirateSquad(APirates.OrderBy(x => x.Distance(cp)).TakeWhile(x => x.Distance(cp) <= MaxDistance).Take(MaxSquadSize));
-                APirates = new PirateSquad(APirates.FilterOutBySquad(c));
-                List<SmartIsland> pi = si.Where(i => Bot.Engine.GetEnemyShipsInRange(i, 5).Count <= c.Count).OrderBy(x => System.Math.Pow(x.Distance(Bot.Engine.MyCities[0]), 2) + System.Math.Pow(x.Distance(cp), 2)).ToList();
-                if (pi.Count == 0)
-                    pss.Add(new LogicedPirateSquad(c, new MPSL()));
-                else
-                {
-                    SmartIsland mi = pi.First();
-                    si.Remove(mi);
-                    pss.Add(new LogicedPirateSquad(c, new PSL(mi)));
-                }*/
                 IEnumerable<Tuple<SmartIsland, PirateSquad, double>> ts = si.SelectMany(i =>
                 {
                     int amt = Bot.Engine.GetEnemyShipsInRange(i, 5).Count;
@@ -224,15 +185,6 @@ namespace Skillz2017
                     APirates = new PirateSquad(APirates.FilterOutBySquad(t.arg1));
                 }
             }
-            /*LogicedPirateSquad[] pss = APirates.GroupBy(x => x.Location, new LocationComparer(1)).Select(x =>
-            {
-                PirateSquad c = new PirateSquad(x);
-                APirates = new PirateSquad(APirates.FilterOutBySquad(c));
-                Location m = c.Middle;
-                SmartIsland si = Bot.Engine.NotMyIslands.OrderBy(i => i.Distance(m)).First();
-                return new LogicedPirateSquad(c, new PSL(si));
-            }).ToArray();*/
-            //if (APirates.Count > 0) pss = pss.Concat(new LogicedPirateSquad[] { new LogicedPirateSquad(APirates, new RPSL()) }).ToArray();
             return pss.Concat(new LogicedPirateSquad[] { CS }).ToArray();
         }
 
@@ -314,19 +266,25 @@ namespace Skillz2017
         {
             public void DoTurn(PirateSquad ps)
             {
-                CamperPlugin cp = new CamperPlugin(Bot.Engine.EnemyCities[0].Location, ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(2), range: 7);
-                ps.ForEach(x => cp.DoTurn(x));
+                Location loc = Bot.Engine.EnemyCities[0].Location;
+                CamperPlugin cp1 = new CamperPlugin(loc.Add(0, System.Math.Sign(Bot.Engine.MyCities[0].Location.Col - loc.Col) * 2), ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(2), range: 7);
+                CamperPlugin cp2 = new CamperPlugin(loc.Add(-2, 0), ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(2), range: 7);
+                CamperPlugin[] pls = new CamperPlugin[] { cp1, cp2 };
+                int i = -1;
+                ps.ForEach(x => pls[i += 1].DoTurn(x));
             }
         }
         class MPSL : PirateSquadLogic
         {
             public void DoTurn(PirateSquad ps)
             {
+                ShootingPlugin shooter = ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(2);
                 CamperPlugin cp = new CamperPlugin(new Location(Bot.Engine.Rows / 2, Bot.Engine.Columns / 2), ShootingPlugin.PrioritizeByNearnessToDeath().PrioritizeByValue(0.9), range: 8);
                 ps.ForEach(x =>
                 {
-                    if (x.CurrentHealth >= 3)
-                        cp.DoTurn(x);
+                    if (!shooter.DoTurn(x))
+                        if (x.CurrentHealth >= 2)
+                            cp.DoTurn(x);
                 });
             }
         }
@@ -1319,8 +1277,11 @@ namespace Skillz2017
         }
         public void SetSail(Aircraft aircraft, MapObject destination)
         {
-            if (aircraft.Distance(destination) > 0)
+            if (aircraft.Distance(destination) > 0 && CanPlay(aircraft))
+            {
+                MarkOnList(aircraft, false);
                 game.SetSail(aircraft, destination);
+            }
         }
         public void SetSail(AircraftBase aircraft, MapObject destination)
         {
@@ -1427,7 +1388,7 @@ namespace Skillz2017
             return CheckHealth(aircraft) > 0;
         }
 
-        private int MovelistId(Aircraft craft)
+        private int SerialID(Aircraft craft)
         {
             if (craft.DetermineType() == AircraftType.Drone)
                 return craft.Id + MyPirates.Count;
@@ -1436,19 +1397,20 @@ namespace Skillz2017
         }
         private void MarkOnList(Aircraft craft, bool state = false)
         {
-            MoveList[MovelistId(craft)] = state;
+            MoveList[SerialID(craft)] = state;
         }
         public bool CanPlay(Aircraft craft)
         {
-            if (MoveList.ContainsKey(MovelistId(craft)))
-                return MoveList[MovelistId(craft)];
+            if (MoveList.ContainsKey(SerialID(craft)))
+                return MoveList[SerialID(craft)];
             else
                 return false;
         }
         public bool Attack(Pirate pirate, Aircraft target)
         {
-            if (IsAlive(target))
+            if (IsAlive(target) && CanPlay(pirate))
             {
+                MarkOnList(pirate, false);
                 AppendToHitlist(target);
                 game.Attack(pirate, target);
                 return true;
@@ -1582,6 +1544,16 @@ namespace Skillz2017
                 });
             }
         }
+        public SailingFunction SailMinimizeDroneDistance
+        {
+            get
+            {
+                return ((ac, l) =>
+                {
+                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingDrones.Select(p => System.Math.Pow(p.Distance(loc), 0.5)).Sum(), true);
+                });
+            }
+        }
         public SailingFunction SailMinimizeShips
         {
             get
@@ -1599,6 +1571,16 @@ namespace Skillz2017
                 return ((ac, l) =>
                 {
                     Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => System.Math.Pow(p.Distance(loc), 2)).Sum(), false);
+                });
+            }
+        }
+        public SailingFunction SailMaximizeMinimalDistance
+        {
+            get
+            {
+                return ((ac, l) =>
+                {
+                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => System.Math.Pow(p.Distance(loc), 2)).Min(), false);
                 });
             }
         }
