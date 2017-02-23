@@ -7,7 +7,7 @@
     <ProjectGuid>{AD02D2FC-9D33-48BB-B210-FF45555184A5}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Skillz2017</RootNamespace>
+    <RootNamespace>MyBot</RootNamespace>
     <AssemblyName>Skillz2017</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -44,10 +44,42 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Main.cs" />
-    <Compile Include="Old.cs" />
+    <Compile Include="Drones\AvoidingDrone.cs" />
+    <Compile Include="Drones\FarFromMiddleDrone.cs" />
+    <Compile Include="Drones\NearestCityDrone.cs" />
+    <Compile Include="Drones\Plugins\DroneGatherPlugin.cs" />
+    <Compile Include="Drones\Plugins\DroneLogic.cs" />
+    <Compile Include="Drones\Plugins\DronePackingPlugin.cs" />
+    <Compile Include="Drones\RandomDrone.cs" />
+    <Compile Include="Engine\AircraftBase.cs" />
+    <Compile Include="Engine\DataStore.cs" />
+    <Compile Include="Engine\Extensions.cs" />
+    <Compile Include="Engine\GameEngine.cs" />
+    <Compile Include="Bot.cs" />
+    <Compile Include="Engine\Handlers.cs" />
+    <Compile Include="Engine\LogicedDrone.cs" />
+    <Compile Include="Engine\LogicedDroneSquad.cs" />
+    <Compile Include="Engine\LogicedPirate.cs" />
+    <Compile Include="Engine\LogicedPirateSquad.cs" />
+    <Compile Include="Engine\PirateGameExtensions.cs" />
+    <Compile Include="Engine\PirateShip.cs" />
+    <Compile Include="Engine\SmartIsland.cs" />
+    <Compile Include="Engine\Squad.cs" />
+    <Compile Include="Engine\TradeShip.cs" />
+    <Compile Include="Engine\Tuple.cs" />
+    <Compile Include="Pirates\EmptyPirate.cs" />
+    <Compile Include="Pirates\Plugins\AntiCamperPlugin.cs" />
+    <Compile Include="Pirates\Plugins\CamperPlugin.cs" />
+    <Compile Include="Pirates\Plugins\ConquerPlugin.cs" />
+    <Compile Include="Pirates\Plugins\DroneHunter.cs" />
+    <Compile Include="Pirates\Plugins\EscortPlugin.cs" />
+    <Compile Include="Pirates\Plugins\KillerPlugin.cs" />
+    <Compile Include="Pirates\Plugins\PiratePlugin.cs" />
+    <Compile Include="Pirates\Plugins\ShootingPlugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Drones\StupidDrone.cs" />
   </ItemGroup>
+  <ItemGroup />
   <ItemGroup>
     <Content Include="lib\PirateGame.dll" />
   </ItemGroup>
