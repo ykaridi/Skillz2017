@@ -3,10 +3,12 @@
     interface IndividualPirateHandler
     {
         LogicedPirate[] AssignPirateLogic(PirateShip[] p);
+        LogicedPirate DecoyHandler(PirateShip p);
     }
     interface SquadPirateHandler
     {
         LogicedPirateSquad[] AssignSquads(PirateShip[] ps);
+        LogicedPirate DecoyHandler(PirateShip p);
     }
     interface IndividualDroneHandler
     {

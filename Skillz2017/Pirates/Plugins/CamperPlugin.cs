@@ -5,10 +5,10 @@ namespace MyBot.Pirates.Plugins
 {
     class CamperPlugin : PiratePlugin
     {
-        Location Camp;
+        MapObject Camp;
         ShootingPlugin shooter;
         int range;
-        public CamperPlugin(Location loc, ShootingPlugin shooter, int range = 13)
+        public CamperPlugin(MapObject loc, ShootingPlugin shooter, int range = 13)
         {
             this.Camp = loc;
             this.shooter = shooter;

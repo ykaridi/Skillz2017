@@ -24,6 +24,8 @@ namespace MyBot.Engine
             MoveList = new Dictionary<int, bool>();
             this.game = pg;
 
+            CanDecoy = DecoyReload == 0;
+
             this.MyLivingAircrafts.ForEach(aircraft =>
             {
                 MarkOnList(aircraft.aircraft, true);
@@ -33,23 +35,23 @@ namespace MyBot.Engine
 
         public void DoTurn(IndividualPirateHandler ph, IndividualDroneHandler dh, bool RespectDataStoreAssignments = true)
         {
-            DoTurn(ph, RespectDataStoreAssignments);
             DoTurn(dh, RespectDataStoreAssignments);
+            DoTurn(ph, RespectDataStoreAssignments);
         }
         public void DoTurn(IndividualPirateHandler ph, SquadDroneHandler dh, bool RespectDataStoreAssignments = true)
         {
-            DoTurn(ph, RespectDataStoreAssignments);
             DoTurn(dh, RespectDataStoreAssignments);
+            DoTurn(ph, RespectDataStoreAssignments);
         }
         public void DoTurn(SquadPirateHandler ph, IndividualDroneHandler dh, bool RespectDataStoreAssignments = true)
         {
-            DoTurn(ph, RespectDataStoreAssignments);
             DoTurn(dh, RespectDataStoreAssignments);
+            DoTurn(ph, RespectDataStoreAssignments);
         }
         public void DoTurn(SquadPirateHandler ph, SquadDroneHandler dh, bool RespectDataStoreAssignments = true)
         {
-            DoTurn(ph, RespectDataStoreAssignments);
             DoTurn(dh, RespectDataStoreAssignments);
+            DoTurn(ph, RespectDataStoreAssignments);
         }
 
         private void DoTurn(IndividualPirateHandler ph, bool RespectDataStoreAssignments)
@@ -65,6 +67,9 @@ namespace MyBot.Engine
 
                 pl.DoTurnWithPlugins(pirate.s);
             }
+
+            if (DecoyActivated && CurrentDecoy.IsAlive)
+                ph.DecoyHandler(CurrentDecoy).DoTurn();
         }
         private void DoTurn(SquadPirateHandler ph, bool RespectDataStoreAssignments)
         {
@@ -86,6 +91,9 @@ namespace MyBot.Engine
                 if (lps.s.IsEmpty()) continue;
                 lps.DoTurn();
             }
+
+            if (DecoyActivated && CurrentDecoy.IsAlive)
+                ph.DecoyHandler(CurrentDecoy).DoTurn();
         }
         private void DoTurn(IndividualDroneHandler dh, bool RespectDataStoreAssignments)
         {
@@ -387,6 +395,22 @@ namespace MyBot.Engine
         {
             return game.GetSailOptions(aircraft.aircraft, destination);
         }
+        public List<Location> GetAllSailOptions(AircraftBase aircraft, MapObject destination, bool nearer = true)
+        {
+            List<Location> pl = new List<Location>();
+            Location s = aircraft.Location;
+            int ms = aircraft.MaxSpeed;
+            for (int c = -ms; c <= ms; c++)
+            {
+                int rm = (ms - System.Math.Abs(c));
+                for (int r = -rm; r <= rm; r++)
+                {
+                    if (!nearer || s.Distance(destination) > s.Add(r, c).Distance(destination))
+                        pl.Add(s.Add(r, c));
+                }
+            }
+            return pl;
+        }
         public int SpawnTurns
         {
             get
@@ -406,6 +430,43 @@ namespace MyBot.Engine
             get
             {
                 return game.GetUnloadRange();
+            }
+        }
+        public bool CanDecoy;
+        public bool Decoy(PirateShip ps)
+        {
+            if (!CanDecoy) return false;
+            game.Decoy(ps.pirate);
+            CanDecoy = false;
+            return true;
+        }
+        public PirateShip CurrentDecoy
+        {
+            get
+            {
+                return game.GetMyDecoy().Upgrade();
+            }
+        }
+        public bool DecoyActivated
+        {
+            get
+            {
+                return game.GetMyDecoy() != null;
+            }
+        }
+        public int DecoyExpiration
+        {
+            get
+            {
+                if (DecoyActivated) return game.GetMyDecoy().TurnsUntilDeath;
+                else return 0;
+            }
+        }
+        public int DecoyReload
+        {
+            get
+            {
+                return Self.TurnsToDecoyReload;
             }
         }
         public void SetSail(Aircraft aircraft, MapObject destination)
@@ -440,17 +501,17 @@ namespace MyBot.Engine
         {
             RandomSail(aircraft.aircraft, destination);
         }
-        public void Sail(Aircraft aircraft, MapObject destination, System.Func<Location, double> ScoreFunction, bool OrderByAscending = true)
+        public void Sail(Aircraft aircraft, MapObject destination, Delegates.LocationScoringFunction ScoreFunction, bool OrderByAscending = true)
         {
             List<Location> locs = GetSailOptions(aircraft, destination);
             Location l;
             if (OrderByAscending)
-                l = locs.OrderBy(ScoreFunction).First();
+                l = locs.OrderBy(x => ScoreFunction(x)).First();
             else
-                l = locs.OrderByDescending(ScoreFunction).First();
+                l = locs.OrderByDescending(x => ScoreFunction(x)).First();
             SetSail(aircraft, l);
         }
-        public void Sail(AircraftBase aircraft, MapObject destination, System.Func<Location, double> ScoreFunction, bool OrderByAscending = true)
+        public void Sail(AircraftBase aircraft, MapObject destination, Delegates.LocationScoringFunction ScoreFunction, bool OrderByAscending = true)
         {
             Sail(aircraft.aircraft, destination, ScoreFunction, OrderByAscending);
         }
@@ -489,7 +550,10 @@ namespace MyBot.Engine
             else
                 return false;
         }
-
+        public int CountCampers(City c, int minTurns = 3)
+        {
+            return GetEnemyShipsInRange(c.Location, CampRange).Count(p => store.GetValue("<Flush><Camper>" + c.Id + "-" + p.Id, 0) >= minTurns);
+        }
         private int HitlistId(Aircraft aircraft)
         {
             if (aircraft.DetermineType() == AircraftType.Drone)
@@ -514,6 +578,7 @@ namespace MyBot.Engine
         }
         public int CheckHealth(Aircraft aircraft)
         {
+            if (aircraft == null) return 0;
             return aircraft.CurrentHealth - GetHits(aircraft);
         }
         public bool IsAlive(Aircraft aircraft)

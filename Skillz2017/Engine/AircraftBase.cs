@@ -10,8 +10,7 @@ namespace MyBot.Engine
     class AircraftBase : MapObject
     {
         #region Sailing Functions
-        public delegate void SailingFunction(Aircraft ac, Location l);
-        public SailingFunction SailMaximizeDrone
+        public Delegates.SailingFunction SailMaximizeDrone
         {
             get
             {
@@ -21,17 +20,17 @@ namespace MyBot.Engine
                 });
             }
         }
-        public SailingFunction SailMinimizeDroneDistance
+        public Delegates.SailingFunction SailMinimizeDroneDistance
         {
             get
             {
                 return ((ac, l) =>
                 {
-                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingDrones.Select(p => System.Math.Pow(p.Distance(loc), 0.5)).Sum(), true);
+                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingDrones.Select(p => p.Distance(loc).Power(2)).Sum(), true);
                 });
             }
         }
-        public SailingFunction SailMinimizeShips
+        public Delegates.SailingFunction SailMinimizeShips
         {
             get
             {
@@ -41,27 +40,27 @@ namespace MyBot.Engine
                 });
             }
         }
-        public SailingFunction SailMaximizeShipDistance
+        public Delegates.SailingFunction SailMaximizeShipDistance
         {
             get
             {
                 return ((ac, l) =>
                 {
-                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => System.Math.Pow(p.Distance(loc), 2)).Sum(), false);
+                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => p.Distance(loc).Power(0.5)).Sum(), false);
                 });
             }
         }
-        public SailingFunction SailMaximizeMinimalDistance
+        public Delegates.SailingFunction SailMaximizeMinimalDistance
         {
             get
             {
                 return ((ac, l) =>
                 {
-                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => System.Math.Pow(p.Distance(loc), 2)).Min(), false);
+                    Bot.Engine.Sail(ac, l, loc => Bot.Engine.EnemyLivingPirates.Select(p => p.Distance(loc).Power(2)).Min(), false);
                 });
             }
         }
-        public SailingFunction SailMaximizeDistanceFromMiddle
+        public Delegates.SailingFunction SailMaximizeDistanceFromMiddle
         {
             get
             {
@@ -71,7 +70,7 @@ namespace MyBot.Engine
                 });
             }
         }
-        public SailingFunction SailDefault
+        public Delegates.SailingFunction SailDefault
         {
             get
             {
@@ -81,7 +80,7 @@ namespace MyBot.Engine
                 });
             }
         }
-        public SailingFunction SailRandom
+        public Delegates.SailingFunction SailRandom
         {
             get
             {
@@ -93,66 +92,66 @@ namespace MyBot.Engine
         }
         #endregion Sailing Functions
         #region Shooting Functions
-        public static System.Func<AircraftBase, double> ShootDronesOnly
+        public static Delegates.AircraftScoringFunction ShootDronesOnly
         {
             get
             {
-                return new System.Func<AircraftBase, double>(x =>
+                return x =>
                 {
                     if (x.Type == AircraftType.Drone) return 1;
                     else return 0;
-                });
+                };
             }
         }
-        public static System.Func<AircraftBase, double> ShootPiratesOnly
+        public static Delegates.AircraftScoringFunction ShootPiratesOnly
         {
             get
             {
-                return new System.Func<AircraftBase, double>(x =>
+                return x =>
                 {
                     if (x.Type == AircraftType.Pirate) return 1;
                     else return 0;
-                });
+                };
             }
         }
-        public static System.Func<AircraftBase, double> ShootByCurrentHealth
+        public static Delegates.AircraftScoringFunction ShootByCurrentHealth
         {
             get
             {
-                return new System.Func<AircraftBase, double>(x =>
+                return x =>
                 {
                     return x.CurrentHealth;
-                });
+                };
             }
         }
-        public static System.Func<AircraftBase, double> ShootByDamageTaken
+        public static Delegates.AircraftScoringFunction ShootByDamageTaken
         {
             get
             {
-                return new System.Func<AircraftBase, double>(x =>
+                return x =>
                 {
                     return x.MaxHealth - x.CurrentHealth;
-                });
+                };
             }
         }
-        public static System.Func<AircraftBase, double> ShootRegular
+        public static Delegates.AircraftScoringFunction ShootRegular
         {
             get
             {
-                return new System.Func<AircraftBase, double>(x =>
+                return x =>
                 {
                     return 1;
-                });
+                };
             }
         }
-        public static System.Func<AircraftBase, double> ShootByNearnessToDeath
+        public static Delegates.AircraftScoringFunction ShootByNearnessToDeath
         {
             get
             {
-                return new System.Func<AircraftBase, double>(x =>
+                return x =>
                 {
                     return ((double)(x.MaxHealth - x.CurrentHealth)) / x.MaxHealth + 1;
-                });
+                };
             }
         }
         #endregion Shooting Functions
@@ -270,6 +269,13 @@ namespace MyBot.Engine
                 return Bot.Engine.CanPlay(aircraft);
             }
         }
+        public City NearestCity
+        {
+            get
+            {
+                return Bot.Engine.MyCities.OrderBy(x => x.Distance(this)).First();
+            }
+        }
 
         public void Sail(MapObject loc, int idx = 0)
         {
@@ -279,11 +285,11 @@ namespace MyBot.Engine
         {
             Bot.Engine.RandomSail(this, loc);
         }
-        public void Sail(MapObject loc, System.Func<Location, double> ScoreFunction, bool OrderByAscending = true)
+        public void Sail(MapObject loc, Delegates.LocationScoringFunction ScoreFunction, bool OrderByAscending = true)
         {
             Bot.Engine.Sail(this, loc, ScoreFunction, OrderByAscending);
         }
-        public void Sail(MapObject loc, SailingFunction SailFunction)
+        public void Sail(MapObject loc, Delegates.SailingFunction SailFunction)
         {
             SailFunction(aircraft, loc.GetLocation());
         }

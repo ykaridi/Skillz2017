@@ -53,6 +53,7 @@
     <Compile Include="Drones\RandomDrone.cs" />
     <Compile Include="Engine\AircraftBase.cs" />
     <Compile Include="Engine\DataStore.cs" />
+    <Compile Include="Engine\Delegates.cs" />
     <Compile Include="Engine\Extensions.cs" />
     <Compile Include="Engine\GameEngine.cs" />
     <Compile Include="Bot.cs" />
@@ -68,12 +69,12 @@
     <Compile Include="Engine\TradeShip.cs" />
     <Compile Include="Engine\Tuple.cs" />
     <Compile Include="Pirates\EmptyPirate.cs" />
-    <Compile Include="Pirates\Plugins\AntiCamperPlugin.cs" />
+    <Compile Include="Pirates\Plugins\AntiCamper.cs" />
+    <Compile Include="Pirates\Plugins\AutoDecoyPlugin.cs" />
     <Compile Include="Pirates\Plugins\CamperPlugin.cs" />
     <Compile Include="Pirates\Plugins\ConquerPlugin.cs" />
     <Compile Include="Pirates\Plugins\DroneHunter.cs" />
     <Compile Include="Pirates\Plugins\EscortPlugin.cs" />
-    <Compile Include="Pirates\Plugins\KillerPlugin.cs" />
     <Compile Include="Pirates\Plugins\PiratePlugin.cs" />
     <Compile Include="Pirates\Plugins\ShootingPlugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

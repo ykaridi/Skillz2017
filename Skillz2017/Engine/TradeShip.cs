@@ -1,4 +1,5 @@
 ﻿using Pirates;
+using System.Linq;
 
 namespace MyBot.Engine
 {
@@ -18,7 +19,6 @@ namespace MyBot.Engine
                 return drone.Value;
             }
         }
-
         #endregion Extends
         #region Custom
         public void ReserveLogic(DroneLogic logic)

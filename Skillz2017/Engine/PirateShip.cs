@@ -4,7 +4,7 @@ namespace MyBot.Engine
 {
     class PirateShip : AircraftBase
     {
-        Pirate pirate;
+        public readonly Pirate pirate;
         public PirateShip(Pirate pirate) : base(pirate)
         {
             this.pirate = pirate;
@@ -29,6 +29,10 @@ namespace MyBot.Engine
         {
             return pirate.InAttackRange(mapObject);
         }
+        public bool Decoy()
+        {
+            return Bot.Engine.Decoy(this);
+        }
         #endregion Custom
         #region Custom
         public bool Attack(Aircraft aircraft)
@@ -38,7 +42,7 @@ namespace MyBot.Engine
             Bot.Engine.Attack(pirate, aircraft);
             return true;
         }
-        public bool Attack<T>(AircraftBase aircraft) where T : Aircraft
+        public bool Attack(AircraftBase aircraft)
         {
             return Attack(aircraft.aircraft);
         }

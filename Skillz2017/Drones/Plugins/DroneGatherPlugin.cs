@@ -10,7 +10,7 @@ namespace MyBot.Drones.Plugins
         int minSize;
         int maxDistance;
         int maxSize;
-        int fleeRange = 4;
+        int fleeRange;
         public DroneGatherPlugin(int minSize = 3, int maxDistance = 7, int maxSize = 10, int fleeRange = 4)
         {
             this.minSize = minSize;
@@ -40,7 +40,6 @@ namespace MyBot.Drones.Plugins
             if (possibleLocs.IsEmpty())
                 return false;
             Location target = possibleLocs.First();
-
             Squad<AircraftBase> drones = Bot.Engine.GetAircraftsOn(target).Filter(y => y.IsOurs && y.Type == AircraftType.Drone);
             if (drones.Count > 0)
             {

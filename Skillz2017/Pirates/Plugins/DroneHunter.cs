@@ -21,7 +21,7 @@ namespace MyBot.Pirates.Plugins
             TradeShip ts = ds.First();
             if (ship.InAttackRange(ts))
             {
-                ship.Attack<Drone>(ts);
+                ship.Attack(ts);
                 return true;
             }
             else

@@ -7,14 +7,14 @@ namespace MyBot.Pirates.Plugins
 {
     class ShootingPlugin : PiratePlugin
     {
-        System.Func<AircraftBase, double> ScoringFunction;
-        System.Func<AircraftBase, MapObject, bool> DFilter;
-        public ShootingPlugin(System.Func<AircraftBase, double> ScoringMehtod, bool AntiSuicide = false)
+        Delegates.AircraftScoringFunction ScoringFunction;
+        Delegates.AircraftFilterFunction DFilter;
+        public ShootingPlugin(Delegates.AircraftScoringFunction ScoringMehtod, bool AntiSuicide = false)
         {
             this.ScoringFunction = ScoringMehtod;
             if (AntiSuicide)
             {
-                DFilter = new System.Func<AircraftBase, MapObject, bool>((ab, l) =>
+                DFilter = (ab, l) =>
                 {
                     if (ab.Type == AircraftType.Drone) return true;
                     List<PirateShip> e = Bot.Engine.GetEnemyShipsInAttackRange(l).ToList();
@@ -25,9 +25,9 @@ namespace MyBot.Pirates.Plugins
                     int HHP = f.Count;
 
                     return EH / HHP < HH / HHP;
-                });
+                };
             }
-            else DFilter = new System.Func<AircraftBase, MapObject, bool>((ab, l) => { return true; });
+            else DFilter = (ab, l) => { return true; };
         }
         public ShootingPlugin() : this(PirateShip.ShootRegular) { }
 
@@ -39,7 +39,7 @@ namespace MyBot.Pirates.Plugins
             else
                 return false;
         }
-        public bool Scan(MapObject loc, int range, System.Func<AircraftBase, MapObject, bool> Filter, out AircraftBase aircraft, bool OrderByDescending = true)
+        public bool Scan(MapObject loc, int range, Delegates.AircraftFilterFunction Filter, out AircraftBase aircraft, bool OrderByDescending = true)
         {
             aircraft = null;
 

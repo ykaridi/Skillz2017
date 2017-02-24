@@ -8,7 +8,7 @@ namespace MyBot.Drones
     {
         public override City CalculateDepositCity(TradeShip ship)
         {
-            return Bot.Engine.MyCities.OrderBy(x => x.Distance(ship)).First();
+            return ship.NearestCity;
         }
     }
 }
