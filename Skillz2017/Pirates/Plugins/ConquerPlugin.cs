@@ -14,7 +14,7 @@ namespace MyBot.Pirates.Plugins
 
         public bool DoTurn(PirateShip ship)
         {
-            if (ship.Distance(island) == 0 || (InRangeOnly && island.InControlRange(ship))) return false;
+            if (ship.Distance(island) == 0 || (!InRangeOnly && island.InControlRange(ship))) return false;
             else
                 ship.Sail(island.Location, ship.SailMaximizeDrone);
             return true;

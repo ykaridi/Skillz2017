@@ -28,6 +28,7 @@ namespace MyBot
             {
                 Engine.store.NextTurn();
                 Engine.Update(game);
+                Engine.Debug(Engine.Enemy.BotName);
                 if (Engine.MyCities.Length == 0)
                 {
                     if (Engine.EnemyCities.Length > 0)
@@ -84,20 +85,25 @@ namespace MyBot
     {
         public DroneLogic AssignDroneLogic(TradeShip d)
         {
-            return new AvoidingDrone().Transform(Bot.Engine.EnemyIslands.Length == 0, x => x.AttachPlugin(new DronePackingPlugin(Bot.Engine.MaxDronesCount, 5)).AttachPlugin(new DroneGatherPlugin(1, 7, 5, 4)));
+            if (Bot.Engine.Enemy.Score < 10 && Bot.Engine.Enemy.BotName == "12003")
+                return new EmptyDrone();
+            return new AvoidingDrone().Transform(Bot.Engine.EnemyIslands.Length == 0 || Bot.Engine.GetEnemyShipsInRange(d.NearestCity, 5).Count > 0, x => x.AttachPlugin(new DronePackingPlugin(Bot.Engine.MaxDronesCount, 5)).AttachPlugin(new DroneGatherPlugin(1, 7, 5, 4)));
         }
 
         public LogicedPirate[] AssignPirateLogic(PirateShip[] p)
         {
+            ShootingPlugin POD = new ShootingPlugin().PrioritizeByValue(0.9);
+            if ((Bot.Engine.Enemy.Score < 10 && Bot.Engine.Enemy.BotName == "12003"))
+                POD = POD.PiratesOnly();
             SmartIsland[] Islands = Bot.Engine.Islands.OrderBy(x => x.ClosestCity.Distance(x)).ToArray();
-            if (Bot.Engine.MyIslands.Length == Bot.Engine.Islands.Length && Bot.Engine.MyLivingDrones.Count == Bot.Engine.MaxDronesCount && Bot.Engine.MaxDronesCount <= Bot.Engine.CountCampers(Bot.Engine.MyCities[0]) * 3)
+            if (Bot.Engine.MyCities.Length == 1 && Bot.Engine.MyIslands.Length == Bot.Engine.Islands.Length && Bot.Engine.MyLivingDrones.Count == Bot.Engine.MaxDronesCount && Bot.Engine.MaxDronesCount <= Bot.Engine.CountCampers(Bot.Engine.MyCities[0]) * 3)
             {
                 return p.Select(x => new LogicedPirate(x, new EmptyPirate().AttachPlugin(new EscortPlugin(Bot.Engine.MyLivingDrones.OrderBy(y => x.Distance(y)).First().Id, 4)))).ToArray();
             }
             else
                 return p.Select(x =>
                 {
-                    return new LogicedPirate(x, new EmptyPirate().AttachPlugin(new ConquerPlugin(Islands[x.Id % Islands.Length])));
+                    return new LogicedPirate(x, new EmptyPirate().Transform(Bot.Engine.MaxDronesCount > 3, y => y.AttachPlugin(POD)).AttachPlugin(new ConquerPlugin(Islands[x.Id % Islands.Length], true)));
                 }).ToArray();
         }
 

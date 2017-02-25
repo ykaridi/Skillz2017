@@ -45,6 +45,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Drones\AvoidingDrone.cs" />
+    <Compile Include="Drones\EmptyDrone.cs" />
     <Compile Include="Drones\FarFromMiddleDrone.cs" />
     <Compile Include="Drones\NearestCityDrone.cs" />
     <Compile Include="Drones\Plugins\DroneGatherPlugin.cs" />

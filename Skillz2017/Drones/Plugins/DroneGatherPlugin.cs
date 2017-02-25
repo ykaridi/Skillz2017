@@ -57,12 +57,5 @@ namespace MyBot.Drones.Plugins
                 return false;
             }
         }
-
-        class EmptyDrone : NearestCityDroneLogic
-        {
-            public override void Sail(TradeShip ship, City city)
-            {
-            }
-        }
     }
 }

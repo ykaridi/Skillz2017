@@ -29,6 +29,24 @@ namespace MyBot.Pirates.Plugins
             }
             else DFilter = (ab, l) => { return true; };
         }
+        public void SetAntiSuicide(bool AntiSuicide)
+        {
+            if (AntiSuicide)
+                DFilter = (ab, l) =>
+                {
+                    if (ab.Type == AircraftType.Drone) return true;
+                    List<PirateShip> e = Bot.Engine.GetEnemyShipsInAttackRange(l).ToList();
+                    int EH = e.Sum(x => x.CurrentHealth);
+                    int EHP = e.Count;
+                    List<PirateShip> f = Bot.Engine.MyLivingPirates.Filter(x => x.InAttackRange(l)).ToList();
+                    int HH = f.Sum(x => x.CurrentHealth);
+                    int HHP = f.Count;
+
+                    return EH / HHP < HH / HHP;
+                };
+            else
+                DFilter = (ab, l) => { return true; };
+        }
         public ShootingPlugin() : this(PirateShip.ShootRegular) { }
 
         public bool DoTurn(PirateShip ship)
